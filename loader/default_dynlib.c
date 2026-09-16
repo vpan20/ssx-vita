@@ -39,6 +39,9 @@ GLboolean glIsShader(GLuint s) { return s != 0; }
 void glSampleCoverage(GLfloat v, GLboolean i) {}
 void glTexParameterfv(GLenum t, GLenum p, const GLfloat *v) { glTexParameterf(t, p, *v); }
 void glValidateProgram(GLuint p) {}
+void *__gnu_Unwind_Find_exidx(void *pc, int *count) { *count = 0; return NULL; }
+int writev(int fd, const void *iov, int cnt) { const struct { void *b; size_t l; } *v = iov; int n = 0; for (int i = 0; i < cnt; i++) n += write(fd, v[i].b, v[i].l); return n; }
+extern const char _ctype_[];
 // libgcc / libstdc++ runtime symbols with no header
 extern void __aeabi_atexit();
 extern void __aeabi_d2lz();
