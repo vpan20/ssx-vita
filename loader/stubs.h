@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <time.h>
-#define DATA_PATH "ux0:data/ssx"
+#define DATA_PATH "uma0:data/ssx"
 void debugPrintf(const char*fmt,...);
 void log_vprintf(const char*tag,const char*fmt,va_list a);
 extern FILE __sF_fake[3];
