@@ -80,7 +80,7 @@ int fsync(int f);
 int fwide(FILE*f,int m);
 int strcoll(const char*a,const char*b);
 int wcscoll(const wchar_t*a,const wchar_t*b);
-char*tzname[2]=;
+extern char*tzname[2];
 void tzset(void);
 char*getenv(const char*n);
 int setenv(const char*n,const char*v,int o);
