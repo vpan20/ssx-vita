@@ -34,8 +34,8 @@ typedef void (*fn_env_iiff)(void *env, void *thiz, int, int, float, float);
 
 static void fatal(const char *msg) {
   debugPrintf("FATAL: %s\n", msg);
-  SceMsgDialogUserMessageParam m = { .buttonType = SCE_MSGDIALOG_BUTTONTYPE_OK, .msg = (const SceChar8 *)msg };
-  SceMsgDialogParam p; sceMsgDialogParamInit(&p); p.mode = SCE_MSGDIALOG_MODE_USER_MSG; p.userMsgParam = &m;
+  SceMsgDialogUserMessageParam m = { .buttonType = SCE_MSG_DIALOG_BUTTON_TYPE_OK, .msg = (const SceChar8 *)msg };
+  SceMsgDialogParam p; sceMsgDialogParamInit(&p); p.mode = SCE_MSG_DIALOG_MODE_USER_MSG; p.userMsgParam = &m;
   sceMsgDialogInit(&p); while (sceMsgDialogGetStatus() != SCE_COMMON_DIALOG_STATUS_FINISHED) { vglSwapBuffers(GL_TRUE); }
   sceKernelExitProcess(0);
 }
@@ -69,7 +69,6 @@ int main(int argc, char *argv[]) {
   // 3. Graphics: VitaGL provides the GLES2 symbols in default_dynlib. Game shaders are GLSL ES → need
   //    VitaGL's runtime translator (vglInitWithCustomThreshold + shark) or precompiled CG. See README §Shaders.
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
-  vglUseVram(GL_TRUE);
 
   // 4. JNI boot sequence (order taken from Blast's MainActivity.onCreate / MainThread.run)
   jni_init();
