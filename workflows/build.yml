@@ -1,0 +1,17 @@
+name: Build SSX.vpk
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: vitasdk/vitasdk:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install port libraries
+        run: vdpm vitaGL vitashark kubridge taihen mathneon
+      - name: Build
+        run: mkdir -p build && cd build && cmake .. && make
+      - name: Upload VPK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSX-vpk
+          path: build/SSX.vpk
