@@ -3,16 +3,25 @@ on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: vitasdk/vitasdk:latest
+    env:
+      VITASDK: /usr/local/vitasdk
     steps:
       - uses: actions/checkout@v4
+      - name: Install soft-float VitaSDK
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake git make curl
+          git clone --depth 1 https://github.com/vitasdk-softfp/vdpm
+          cd vdpm && sudo -E ./bootstrap-vitasdk.sh && sudo -E ./install-all.sh
+          sudo chown -R $USER $VITASDK
       - name: Install port libraries
         run: |
-          vdpm vitaGL kubridge taihen || true
+          export PATH=$VITASDK/bin:$PATH
           git clone --depth 1 https://github.com/Rinnegatamante/vitaShaRK && make -C vitaShaRK install
           git clone --depth 1 https://github.com/Rinnegatamante/math-neon && make -C math-neon install
       - name: Build
-        run: mkdir -p build && cd build && cmake .. && make
+        run: |
+          export PATH=$VITASDK/bin:$PATH
+          mkdir -p build && cd build && cmake .. && make
       - name: Upload VPK
         uses: actions/upload-artifact@v4
         with:
