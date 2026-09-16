@@ -78,6 +78,7 @@ int so_load(so_module *mod, const char *filename, uintptr_t load_addr) {
   sceIoLseek(fd, 0, SCE_SEEK_SET);
 
   so_blockid = sceKernelAllocMemBlock("file", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, (so_size + 0xfff) & ~0xfff, NULL);
+  debugPrintf("so_load %s: size=%u filebuf=0x%08X\n", filename, (unsigned)so_size, so_blockid);
   if (so_blockid < 0)
     return so_blockid;
 
@@ -111,6 +112,7 @@ int so_load(so_module *mod, const char *filename, uintptr_t load_addr) {
         opt.attr = 0x1;
         opt.field_C = (SceUInt32)load_addr;
         res = mod->text_blockid = kuKernelAllocMemBlock("rx_block", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, prog_size, &opt);
+        debugPrintf("rx_block alloc: res=0x%08X load_addr=0x%08X size=%u\n", res, (unsigned)load_addr, (unsigned)prog_size);
         if (res < 0)
           goto err_free_so;
 
