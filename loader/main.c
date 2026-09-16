@@ -62,14 +62,17 @@ int main(int argc, char *argv[]) {
   // 2. libgame. default_dynlib_only=0 → unresolved symbols fall through to already-loaded modules (gnustl).
     int r = so_load(&game_mod, DATA_PATH "/lib/libgame.so", LOAD_ADDR_GAME);
   if (r < 0) { debugPrintf("so_load libgame error 0x%08X free=%d\n", r, sceKernelGetFreeMemorySize(NULL)); fatal("so_load libgame"); }
-  so_relocate(&game_mod);
-  so_resolve(&game_mod, default_dynlib, default_dynlib_size, 0);
+  so_relocate(&game_mod);             debugPrintf("relocate ok\n");
+  so_resolve(&game_mod, default_dynlib, default_dynlib_size, 0); debugPrintf("resolve ok\n");
   // TODO(step 4): patch_game() — hook allocator sizes / disable Nimble init / skip vp6 replays once addresses are known from Ghidra.
-  so_flush_caches(&game_mod); so_initialize(&game_mod);
+  so_flush_caches(&game_mod);         debugPrintf("flush ok\n");
+  so_initialize(&game_mod);           debugPrintf("initialize ok (static constructors ran)\n");
 
   // 3. Graphics: VitaGL provides the GLES2 symbols in default_dynlib. Game shaders are GLSL ES → need
   //    VitaGL's runtime translator (vglInitWithCustomThreshold + shark) or precompiled CG. See README §Shaders.
+  if (!file_exists("ur0:data/libshacccg.suprx")) fatal("libshacccg.suprx missing — run ShaRKBR33D");
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
+  debugPrintf("vitaGL ok\n");
 
   // 4. JNI boot sequence (order taken from Blast's MainActivity.onCreate / MainThread.run)
   jni_init();
