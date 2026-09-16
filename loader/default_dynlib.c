@@ -24,6 +24,21 @@
 #include <sched.h>
 #include "so_util.h"
 #include "stubs.h"
+// GL functions absent from VitaGL — no-op/sane-default implementations
+void glBlendColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {}
+void glCompressedTexSubImage2D(GLenum t, GLint l, GLint x, GLint y, GLsizei w, GLsizei h, GLenum f, GLsizei s, const void *d) { static int once; if (!once++) debugPrintf("GL: glCompressedTexSubImage2D called (stub)\n"); }
+void glDetachShader(GLuint p, GLuint s) {}
+void glGetRenderbufferParameteriv(GLenum t, GLenum p, GLint *v) { *v = 0; }
+void glGetShaderPrecisionFormat(GLenum st, GLenum pt, GLint *range, GLint *prec) { range[0] = 127; range[1] = 127; *prec = 23; }
+void glGetTexParameterfv(GLenum t, GLenum p, GLfloat *v) { *v = 0; }
+void glGetTexParameteriv(GLenum t, GLenum p, GLint *v) { *v = 0; }
+void glGetUniformfv(GLuint p, GLint l, GLfloat *v) { *v = 0; }
+void glGetUniformiv(GLuint p, GLint l, GLint *v) { *v = 0; }
+GLboolean glIsBuffer(GLuint b) { return b != 0; }
+GLboolean glIsShader(GLuint s) { return s != 0; }
+void glSampleCoverage(GLfloat v, GLboolean i) {}
+void glTexParameterfv(GLenum t, GLenum p, const GLfloat *v) { glTexParameterf(t, p, *v); }
+void glValidateProgram(GLuint p) {}
 // libgcc / libstdc++ runtime symbols with no header
 extern void __aeabi_atexit();
 extern void __aeabi_d2lz();
