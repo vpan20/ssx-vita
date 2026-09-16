@@ -13,9 +13,9 @@
 #define SCREEN_W 960
 #define SCREEN_H 544
 #define LOAD_ADDR_GAME   0x98000000
-#define LOAD_ADDR_GNUSTL 0x9A000000   // libgame.so is ~40MB mapped; keep gnustl clear of it
-#define MEMORY_NEWLIB_MB 240
-#define MEMORY_VITAGL_MB 128          // tune: game streams textures from .big caches
+#define LOAD_ADDR_GNUSTL 0x9C000000   // libgame.so is ~40MB mapped; keep gnustl clear of it
+#define MEMORY_NEWLIB_MB 192
+#define MEMORY_VITAGL_MB 64          // tune: game streams textures from .big caches
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
 unsigned int sceLibcHeapSize = 8 * 1024 * 1024;
@@ -60,7 +60,8 @@ int main(int argc, char *argv[]) {
   so_flush_caches(&gnustl_mod); so_initialize(&gnustl_mod);
 
   // 2. libgame. default_dynlib_only=0 → unresolved symbols fall through to already-loaded modules (gnustl).
-  if (so_load(&game_mod, DATA_PATH "/lib/libgame.so", LOAD_ADDR_GAME) < 0) fatal("so_load libgame");
+    int r = so_load(&game_mod, DATA_PATH "/lib/libgame.so", LOAD_ADDR_GAME);
+  if (r < 0) { debugPrintf("so_load libgame error 0x%08X free=%d\n", r, sceKernelGetFreeMemorySize(NULL)); fatal("so_load libgame"); }
   so_relocate(&game_mod);
   so_resolve(&game_mod, default_dynlib, default_dynlib_size, 0);
   // TODO(step 4): patch_game() — hook allocator sizes / disable Nimble init / skip vp6 replays once addresses are known from Ghidra.
