@@ -77,12 +77,11 @@ int so_load(so_module *mod, const char *filename, uintptr_t load_addr) {
   so_size = sceIoLseek(fd, 0, SCE_SEEK_END);
   sceIoLseek(fd, 0, SCE_SEEK_SET);
 
-  so_blockid = sceKernelAllocMemBlock("file", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, (so_size + 0xfff) & ~0xfff, NULL);
+  so_data = malloc(so_size); so_blockid = so_data ? 1 : -1;
   debugPrintf("so_load %s: size=%u filebuf=0x%08X\n", filename, (unsigned)so_size, so_blockid);
   if (so_blockid < 0)
     return so_blockid;
 
-  sceKernelGetMemBlockBase(so_blockid, &so_data);
 
   sceIoRead(fd, so_data, so_size);
   sceIoClose(fd);
@@ -202,7 +201,7 @@ int so_load(so_module *mod, const char *filename, uintptr_t load_addr) {
     }
   }
 
-  sceKernelFreeMemBlock(so_blockid);
+  free(so_data);
 
   if (!head && !tail) {
     head = mod;
@@ -219,7 +218,7 @@ err_free_data:
 err_free_text:
   sceKernelFreeMemBlock(mod->text_blockid);
 err_free_so:
-  sceKernelFreeMemBlock(so_blockid);
+  free(so_data);
 
   return res;
 }
