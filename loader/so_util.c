@@ -112,7 +112,7 @@ int so_load(so_module *mod, const char *filename, uintptr_t load_addr) {
         opt.attr = 0x1;
         opt.field_C = (SceUInt32)load_addr;
         res = mod->text_blockid = kuKernelAllocMemBlock("rx_block", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, prog_size, &opt);
-        debugPrintf("rx_block alloc: res=0x%08X load_addr=0x%08X size=%u\n", res, (unsigned)load_addr, (unsigned)prog_size);
+        debugPrintf("  text: addr=0x%08X size=0x%X res=0x%08X\n", (unsigned)load_addr, (unsigned)prog_size, res);
         if (res < 0)
           goto err_free_so;
 
@@ -136,6 +136,7 @@ int so_load(so_module *mod, const char *filename, uintptr_t load_addr) {
         opt.attr = 0x1;
         opt.field_C = (SceUInt32)data_addr;
         res = mod->data_blockid = kuKernelAllocMemBlock("rw_block", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, prog_size, &opt);
+        debugPrintf("  data: addr=0x%08X size=0x%X res=0x%08X\n", (unsigned)data_addr, (unsigned)prog_size, res);
         if (res < 0)
           goto err_free_text;
 
