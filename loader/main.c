@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 
   if (!file_exists(DATA_PATH "/lib/libgame.so"))  fatal("Missing " DATA_PATH "/lib/libgame.so");
   if (!file_exists(DATA_PATH "/lib/libgnustl_shared.so")) fatal("Missing " DATA_PATH "/lib/libgnustl_shared.so");
-  if (!file_exists(DATA_PATH "/obb/bootcache.big")) fatal("Missing .big assets in " DATA_PATH "/obb/");
+  if (!file_exists(DATA_PATH "/obb/EAMCore.ini")) fatal("Missing .big assets in " DATA_PATH "/obb/");
 
   // 1. gnustl first: libgame imports std::string/rb_tree internals from it.
   if (so_load(&gnustl_mod, DATA_PATH "/lib/libgnustl_shared.so", LOAD_ADDR_GNUSTL) < 0) fatal("so_load gnustl");
