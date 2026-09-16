@@ -1,4 +1,5 @@
 // AUTO-GENERATED from libgame.so undefined imports (432). Edit stubs.c for overrides.
+#include <wctype.h> and #include <signal.h>
 #include <vitasdk.h>
 #include <vitaGL.h>
 #include <stdio.h>
