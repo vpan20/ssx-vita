@@ -27,6 +27,57 @@ static int api_level(void)          { return 14; }
 static float density(void)          { return 1.0f; }
 static int egl_ok(void)             { return 1; }   // all EGL10.* calls report success; VitaGL owns the context
 
+// ---- Android AssetManager emulation on top of DATA_PATH/obb ----------------------------
+#define TAG_ASSET_MGR 0x41534D47
+#define TAG_STREAM    0x41535452
+typedef struct { int tag; } AssetMgr;
+typedef struct { int tag; SceUID fd; long size; long pos; } AssetStream;
+static AssetMgr fake_asset_mgr = { TAG_ASSET_MGR };
+void *fake_asset_manager = &fake_asset_mgr;
+
+static void asset_path(char *out, size_t n, const char *name) {
+  if (!strncmp(name, "appbundle:/", 11)) name += 11;
+  while (*name == '/') name++;
+  snprintf(out, n, DATA_PATH "/obb/%s", name);
+}
+static AssetStream *asset_open(const char *name) {
+  char p[512]; asset_path(p, sizeof p, name);
+  SceUID fd = sceIoOpen(p, SCE_O_RDONLY, 0);
+  if (fd < 0) { debugPrintf("asset open FAIL %s\n", p); return NULL; }
+  AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
+  s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
+  return s;
+}
+static int asset_read(AssetStream *s, int *jarr, int off, int len) {
+  if (!s || s->tag != TAG_STREAM) return -1;
+  if (s->pos >= s->size) return -1;
+  int n = sceIoRead(s->fd, (char *)(jarr + 1) + off, len);
+  if (n > 0) s->pos += n;
+  return n > 0 ? n : -1;
+}
+static long long asset_skip(AssetStream *s, long long n) {
+  if (!s || s->tag != TAG_STREAM) return 0;
+  long np = s->pos + (long)n; if (np > s->size) np = s->size;
+  sceIoLseek(s->fd, np, SCE_SEEK_SET); long long d = np - s->pos; s->pos = np; return d;
+}
+static void asset_close(AssetStream *s) {
+  if (!s || s->tag != TAG_STREAM) return;
+  sceIoClose(s->fd); s->tag = 0; free(s);
+}
+static int *asset_list(const char *name) {
+  char p[512]; asset_path(p, sizeof p, name);
+  SceUID d = sceIoDopen(p);
+  char *names[512]; int n = 0;
+  if (d >= 0) { SceIoDirent e; while (n < 512 && sceIoDread(d, &e) > 0) names[n++] = strdup(e.d_name); sceIoDclose(d); }
+  int *arr = calloc(n + 1, sizeof(int)); arr[0] = n; for (int i = 0; i < n; i++) arr[1 + i] = (int)names[i];
+  return arr;
+}
+enum { M_OPEN = 900, M_OPENFD, M_LIST, M_READ, M_SKIP, M_CLOSE, M_GETLENGTH, M_GETASSETS };
+static const struct { const char *n; int id; } special[] = {
+  { "open", M_OPEN }, { "openFd", M_OPENFD }, { "list", M_LIST }, { "read", M_READ },
+  { "skip", M_SKIP }, { "close", M_CLOSE }, { "getLength", M_GETLENGTH }, { "getAssets", M_GETASSETS },
+};
+
 // ---- method tables (name → C impl). Names come from strings in libgame.so; extend as the
 // log reveals "JNI: unknown method <name>". Return type must match the Call<Type>Method used.
 static jni_method methods[] = {
@@ -50,7 +101,6 @@ static jni_method methods[] = {
   { "GetOrientation",       (uintptr_t)ret0 },{ "SetOrientation",   (uintptr_t)retv },
   { "GetBatteryLevel",      (uintptr_t)ret1 },{ "IsPowerConnected",  (uintptr_t)ret1 },
   { "ShowKeyboard",         (uintptr_t)retv },{ "HideKeyboard",      (uintptr_t)retv },
-  { "GetAssets",            (uintptr_t)ret1 },
   // com/ea/ssx/trust5/Trust5Facade — IAP/DRM: always offline, always owned
   { "Initialize",           (uintptr_t)retv },{ "IsInitialized",     (uintptr_t)ret1 },
   { "RequestTierInfo",      (uintptr_t)retv },{ "RequestPurchase",   (uintptr_t)retv },
@@ -75,6 +125,7 @@ static int FindClass(void *env, const char *name) {
   return CLASS_GENERIC;
 }
 static int GetMethodID(void *env, int clazz, const char *name, const char *sig) {
+  for (unsigned i = 0; i < sizeof(special)/sizeof(special[0]); i++) if (!strcmp(special[i].n, name)) return special[i].id;
   for (unsigned i = 0; i < NMETHODS; i++) if (!strcmp(methods[i].name, name)) return i + 1;
   for (int i = 0; i < unknown_count; i++) if (!strcmp(unknown_names[i], name)) return UNKNOWN_BASE + i;
   debugPrintf("JNI: unknown method %s %s (class %d)\n", name, sig, clazz);
@@ -84,29 +135,59 @@ static int GetMethodID(void *env, int clazz, const char *name, const char *sig) 
 static uintptr_t lookup(int id) { return (id >= 1 && id <= (int)NMETHODS) ? methods[id-1].func : 0; }
 
 // ---- Call*Method: args are passed via va_list; we forward up to 6 ints (covers every sig seen) ----
+#define FWD(f, obj, a) ((RET(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(obj,a[0],a[1],a[2],a[3],a[4],a[5])
 #define CALLV(NAME, RET, CAST) \
-  static RET NAME##V(void *env, int obj, int mid, va_list args) { \
+  static RET NAME##V(void *env, uintptr_t obj, int mid, va_list args) { \
+    if (mid >= M_OPEN && mid <= M_GETASSETS) return (RET)special_call(mid, obj, args); \
     uintptr_t f = lookup(mid); \
     if (!f) { if (mid < UNKNOWN_BASE || mid - UNKNOWN_BASE >= unknown_count) return (RET)0; \
               static int warned[512]; if (!warned[mid-UNKNOWN_BASE]++) debugPrintf("JNI: call to unimplemented %s\n", unknown_names[mid-UNKNOWN_BASE]); return (RET)0; } \
     uintptr_t a[6]; for (int i = 0; i < 6; i++) a[i] = va_arg(args, uintptr_t); \
-    return ((RET(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(a[0],a[1],a[2],a[3],a[4],a[5]); } \
-  static RET NAME(void *env, int obj, int mid, ...) { va_list ap; va_start(ap, mid); RET r = NAME##V(env, obj, mid, ap); va_end(ap); return r; } \
-  static RET NAME##A(void *env, int obj, int mid, uintptr_t *args) { uintptr_t f = lookup(mid); if (!f) return (RET)0; \
-    return ((RET(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(args[0],args[1],args[2],args[3],args[4],args[5]); }
+    return FWD(f, obj, a); } \
+  static RET NAME(void *env, uintptr_t obj, int mid, ...) { va_list ap; va_start(ap, mid); RET r = NAME##V(env, obj, mid, ap); va_end(ap); return r; } \
+  static RET NAME##A(void *env, uintptr_t obj, int mid, uintptr_t *args) { \
+    if (mid >= M_OPEN && mid <= M_GETASSETS) return (RET)special_callA(mid, obj, args); \
+    uintptr_t f = lookup(mid); if (!f) return (RET)0; return FWD(f, obj, args); }
+
+// special (asset) dispatch: reads the correctly-typed args
+static long long special_call(int mid, uintptr_t obj, va_list args) {
+  switch (mid) {
+    case M_GETASSETS: return (long long)(uintptr_t)fake_asset_manager;
+    case M_OPEN: case M_OPENFD: { const char *n = va_arg(args, const char *); return (long long)(uintptr_t)asset_open(n); }
+    case M_LIST:  { const char *n = va_arg(args, const char *); return (long long)(uintptr_t)asset_list(n); }
+    case M_READ:  { int *arr = va_arg(args, int *); int off = va_arg(args, int); int len = va_arg(args, int); return asset_read((AssetStream *)obj, arr, off, len); }
+    case M_SKIP:  { long long n = va_arg(args, long long); return asset_skip((AssetStream *)obj, n); }
+    case M_CLOSE: asset_close((AssetStream *)obj); return 0;
+    case M_GETLENGTH: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size : 0; }
+  }
+  return 0;
+}
+static long long special_callA(int mid, uintptr_t obj, uintptr_t *a) {
+  switch (mid) {
+    case M_GETASSETS: return (long long)(uintptr_t)fake_asset_manager;
+    case M_OPEN: case M_OPENFD: return (long long)(uintptr_t)asset_open((const char *)a[0]);
+    case M_LIST:  return (long long)(uintptr_t)asset_list((const char *)a[0]);
+    case M_READ:  return asset_read((AssetStream *)obj, (int *)a[0], (int)a[1], (int)a[2]);
+    case M_SKIP:  { long long n; memcpy(&n, a, 8); return asset_skip((AssetStream *)obj, n); }
+    case M_CLOSE: asset_close((AssetStream *)obj); return 0;
+    case M_GETLENGTH: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size : 0; }
+  }
+  return 0;
+}
 
 CALLV(CallObjectMethod,  uintptr_t, uintptr_t)
 CALLV(CallBooleanMethod, int, int)
 CALLV(CallIntMethod,     int, int)
 CALLV(CallLongMethod,    int64_t, int64_t)
-static float CallFloatMethodV(void *env,int obj,int mid,va_list args){ uintptr_t f=lookup(mid); return f?((float(*)(void))f)():0.0f; }
-static float CallFloatMethod(void *env,int obj,int mid,...){ va_list ap;va_start(ap,mid);float r=CallFloatMethodV(env,obj,mid,ap);va_end(ap);return r; }
-static void  CallVoidMethodV(void *env,int obj,int mid,va_list args){ uintptr_t f=lookup(mid); if(f){uintptr_t a[6];for(int i=0;i<6;i++)a[i]=va_arg(args,uintptr_t);((void(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(a[0],a[1],a[2],a[3],a[4],a[5]);} }
-static void  CallVoidMethod(void *env,int obj,int mid,...){ va_list ap;va_start(ap,mid);CallVoidMethodV(env,obj,mid,ap);va_end(ap); }
-static void  CallVoidMethodA(void *env,int obj,int mid,uintptr_t*a){ uintptr_t f=lookup(mid); if(f)((void(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(a[0],a[1],a[2],a[3],a[4],a[5]); }
+static float CallFloatMethodV(void *env,uintptr_t obj,int mid,va_list args){ uintptr_t f=lookup(mid); return f?((float(*)(uintptr_t))f)(obj):0.0f; }
+static float CallFloatMethod(void *env,uintptr_t obj,int mid,...){ va_list ap;va_start(ap,mid);float r=CallFloatMethodV(env,obj,mid,ap);va_end(ap);return r; }
+static void  CallVoidMethodV(void *env,uintptr_t obj,int mid,va_list args){ if(mid>=M_OPEN&&mid<=M_GETASSETS){special_call(mid,obj,args);return;} uintptr_t f=lookup(mid); if(f){uintptr_t a[6];for(int i=0;i<6;i++)a[i]=va_arg(args,uintptr_t);((void(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(obj,a[0],a[1],a[2],a[3],a[4],a[5]);} else if(mid>=UNKNOWN_BASE&&mid-UNKNOWN_BASE<unknown_count){static int w[512]; if(!w[mid-UNKNOWN_BASE]++) debugPrintf("JNI: call to unimplemented %s\n", unknown_names[mid-UNKNOWN_BASE]);} }
+static void  CallVoidMethod(void *env,uintptr_t obj,int mid,...){ va_list ap;va_start(ap,mid);CallVoidMethodV(env,obj,mid,ap);va_end(ap); }
+static void  CallVoidMethodA(void *env,uintptr_t obj,int mid,uintptr_t*a){ if(mid>=M_OPEN&&mid<=M_GETASSETS){special_callA(mid,obj,a);return;} uintptr_t f=lookup(mid); if(f)((void(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(obj,a[0],a[1],a[2],a[3],a[4],a[5]); }
 
 // ---- strings / arrays / refs -------------------------------------------------
 static char *NewStringUTF(void *env, const char *s) { return s ? strdup(s) : NULL; }
+char *jni_new_string(const char *s) { return strdup(s); }
 static const char *GetStringUTFChars(void *env, char *s, int *isCopy) { if (isCopy) *isCopy = 0; return s; }
 static void ReleaseStringUTFChars(void *env, char *s, const char *c) {}
 static int GetStringUTFLength(void *env, char *s) { return s ? (int)strlen(s) : 0; }

@@ -31,7 +31,6 @@ typedef void (*fn_env_i)(void *env, void *thiz, int);
 typedef void (*fn_env_ii)(void *env, void *thiz, int, int);
 typedef void (*fn_env_iii)(void *env, void *thiz, int, int, int);
 typedef void (*fn_env_iiff)(void *env, void *thiz, int, int, float, float);
-#define SYM(type, var, name) type var = (type)so_symbol(&game_mod, name); if (!var) fatal("missing symbol " name)
 
 static void fatal(const char *msg) {
   debugPrintf("FATAL: %s\n", msg);
@@ -76,37 +75,36 @@ int main(int argc, char *argv[]) {
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
   debugPrintf("vitaGL ok\n");
 
-  // 4. JNI boot sequence (order taken from Blast's MainActivity.onCreate / MainThread.run)
+  // 4. JNI boot sequence (order taken from Blast's MainActivity.onCreate / MainThread.run).
+  //    Every entry is called with a full 8-word argument set; extras are harmless on ARM.
   jni_init();
-  SYM(fn_JNI_OnLoad, JNI_OnLoad, "JNI_OnLoad");
-  SYM(fn_env_v,  EAThread_Init,      "Java_com_ea_EAThread_EAThread_Init");
-  SYM(fn_env_v,  EAIO_Startup,       "Java_com_ea_EAIO_EAIO_StartupNativeImpl");
-  SYM(fn_env_v,  Storage_Startup,    "Java_com_ea_EAMIO_StorageDirectory_StartupNativeImpl");
-  SYM(fn_env_v,  Audio_Init,         "Java_com_ea_EAAudioCore_AndroidEAAudioCore_Init");
-  SYM(fn_env_v,  AudioWrap_Startup,  "Java_com_ea_EAMAudio_EAMAudioCoreWrapper_NativeStartup");
-  SYM(fn_env_v,  Video_Startup,      "Java_com_ea_VideoPlayer_PlayerAndroid_StartupNativeImpl");
-  SYM(fn_env_v,  Main_OnCreate,      "Java_com_ea_blast_MainActivity_NativeOnCreate");
-  SYM(fn_env_v,  Main_OnResume,      "Java_com_ea_blast_MainActivity_NativeOnResume");
-  SYM(fn_env_i,  Main_OnFocus,       "Java_com_ea_blast_MainActivity_NativeOnWindowFocusChanged");
-  SYM(fn_env_v,  Surface_Created,    "Java_com_ea_blast_MainThread_NativeOnSurfaceCreated");
-  SYM(fn_env_ii, Surface_Changed,    "Java_com_ea_blast_MainThread_NativeOnSurfaceChanged");
-  SYM(fn_env_v,  DrawFrame,          "Java_com_ea_blast_MainThread_NativeOnDrawFrame");
-  // Touch: signature guessed from Blast convention (pointerId, action, x, y) — verify in Ghidra, symbol is unstripped.
-  fn_env_iiff Touch = (fn_env_iiff)so_symbol(&game_mod, "Java_com_ea_blast_TouchSurfaceAndroid_NativeOnPointerEvent");
-  fn_env_ii   Key   = (fn_env_ii)  so_symbol(&game_mod, "Java_com_ea_blast_KeyboardAndroid_NativeOnKeyDown");
-  fn_env_ii   KeyUp = (fn_env_ii)  so_symbol(&game_mod, "Java_com_ea_blast_KeyboardAndroid_NativeOnKeyUp");
-  debugPrintf("touch=%p key=%p\n", Touch, Key);
-
+  typedef void (*fn_jni)(void *env, void *thiz, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+  #define J(name) ((fn_jni)so_symbol(&game_mod, name))
+  #define CALL(name, ...) do { fn_jni f = J(name); if (!f) fatal("missing " name); f(fake_env, NULL, __VA_ARGS__); debugPrintf(name " ok\n"); } while (0)
+  fn_JNI_OnLoad JNI_OnLoad = (fn_JNI_OnLoad)so_symbol(&game_mod, "JNI_OnLoad");
+  if (!JNI_OnLoad) fatal("missing JNI_OnLoad");
   JNI_OnLoad(fake_vm, NULL);           debugPrintf("JNI_OnLoad ok\n");
-  EAThread_Init(fake_env, NULL);       debugPrintf("EAThread ok\n");
-  EAIO_Startup(fake_env, NULL);        debugPrintf("EAIO ok\n");
-  Storage_Startup(fake_env, NULL);     debugPrintf("Storage ok\n");
-  Audio_Init(fake_env, NULL);          AudioWrap_Startup(fake_env, NULL); debugPrintf("Audio ok\n");
-  Video_Startup(fake_env, NULL);       debugPrintf("Video ok\n");
-  Main_OnCreate(fake_env, NULL);       debugPrintf("OnCreate ok\n");
-  Main_OnResume(fake_env, NULL);       Main_OnFocus(fake_env, NULL, 1);
-  Surface_Created(fake_env, NULL);     Surface_Changed(fake_env, NULL, SCREEN_W, SCREEN_H);
-  debugPrintf("Surface ok — entering frame loop\n");
+
+  uintptr_t sInternal = (uintptr_t)jni_new_string(DATA_PATH "/internal");
+  uintptr_t sExternal = (uintptr_t)jni_new_string(DATA_PATH "/external");
+  uintptr_t sObb      = (uintptr_t)jni_new_string(DATA_PATH "/obb");
+  uintptr_t am        = (uintptr_t)fake_asset_manager;
+  sceIoMkdir(DATA_PATH "/external", 0777);
+
+  CALL("Java_com_ea_EAThread_EAThread_Init", 0,0,0,0,0,0);
+  CALL("Java_com_ea_EAIO_EAIO_StartupNativeImpl", am, sInternal, sExternal, sObb, 0,0);   // (assetManager, dataDir, externalDir, apkPath)
+  CALL("Java_com_ea_EAMIO_StorageDirectory_StartupNativeImpl", 0,0,0,0,0,0);
+  CALL("Java_com_ea_EAAudioCore_AndroidEAAudioCore_Init", 44100, 16, 2, 2048, 0,0);      // (sampleRate, bits, channels, bufferFrames) — best guess
+  CALL("Java_com_ea_EAMAudio_EAMAudioCoreWrapper_NativeStartup", 0,0,0,0,0,0);
+  CALL("Java_com_ea_VideoPlayer_PlayerAndroid_StartupNativeImpl", 0,0,0,0,0,0);
+  CALL("Java_com_ea_blast_MainActivity_NativeOnCreate", 0,0,0,0,0,0);
+  CALL("Java_com_ea_blast_MainActivity_NativeOnResume", 1,0,0,0,0,0);
+  CALL("Java_com_ea_blast_MainActivity_NativeOnWindowFocusChanged", 1,0,0,0,0,0);
+  CALL("Java_com_ea_blast_MainThread_NativeOnSurfaceCreated", 1,0,0,0,0,0);
+  CALL("Java_com_ea_blast_MainThread_NativeOnSurfaceChanged", SCREEN_W, SCREEN_H, 0,0,0,0);
+  fn_jni DrawFrame = J("Java_com_ea_blast_MainThread_NativeOnDrawFrame");
+  fn_env_iiff Touch = (fn_env_iiff)so_symbol(&game_mod, "Java_com_ea_blast_TouchSurfaceAndroid_NativeOnPointerEvent");
+  debugPrintf("boot chain complete — entering frame loop\n");
 
   // 5. Frame loop. Android calls NativeOnDrawFrame from GLSurfaceView; we do the same and swap ourselves.
   sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
@@ -121,7 +119,7 @@ int main(int argc, char *argv[]) {
     }
     // TODO(step 4): map SceCtrl buttons → Blast key codes (Android KEYCODE_DPAD_*, BUTTON_A…) via Key/KeyUp once the
     // game's gamepad path is confirmed; the console-origin code very likely has a full pad path behind it.
-    DrawFrame(fake_env, NULL);
+    DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
     vglSwapBuffers(GL_FALSE);
   }
   return 0;
