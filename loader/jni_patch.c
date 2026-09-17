@@ -45,11 +45,11 @@ static void asset_path(char *out, size_t n, const char *name) {
 // name (whitespace-delimited) and replace the whole size=... token, so conditionals like {{pc}?20M:100M} are
 // dropped. Applied to the in-memory copy only; the file on the card is untouched.
 static const struct { const char *name; const char *size; } memcfg_rules[] = {
-  { "AUDIODATA_GEN", "24M" },   { "GAMEPLAY_GEN", "16M" },     { "GAMEWORLD_GEN", "16M" },
-  { "GLOBAL_GEN", "30M" },      { "STL_GEN", "8M" },           { "FE_GEN", "8M" },
+  { "AUDIODATA_GEN", "16M" },   { "GAMEPLAY_GEN", "12M" },     { "GAMEWORLD_GEN", "12M" },
+  { "GLOBAL_GEN", "24M" },      { "RENDER_GEN", "48M" },      { "STL_GEN", "8M" },           { "FE_GEN", "8M" },
   { "FE_SFGFX_GEN_A", "12M" },  { "FE_SFGFX_GEN_B", "3M" },    { "FE_SFGFX_AS_SBA", "2M" },
   { "FE_SFGFX_ASCRIPT", "6M" }, { "FE_SFGFX_REN_SBA", "4M" },  { "FE_SFGFX_RENDER", "5M" },
-  { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "16M" },  { "GAMEWORLD_SLOTALLOC", "12M" },
+  { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "12M" },  { "GAMEWORLD_SLOTALLOC", "12M" },
   { "ASSETSTREAM_READBUF", "3M" }, { "AUDIO_RWAC", "4M" },
 };
 static int is_ws(char c) { return c == ' ' || c == '\t'; }
