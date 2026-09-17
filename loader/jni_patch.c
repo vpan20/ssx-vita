@@ -25,7 +25,8 @@ static int screen_w(void)           { return 960; }
 static int screen_h(void)           { return 544; }
 static int api_level(void)          { return 14; }
 static float density(void)          { return 1.0f; }
-static int egl_ok(void)             { return 1; }   // all EGL10.* calls report success; VitaGL owns the context
+static int egl_ok(void)             { return 1; }
+static int audio_write(uintptr_t obj, int *arr, int off, int len) { return len; }  // pretend consumed   // all EGL10.* calls report success; VitaGL owns the context
 
 // ---- Android AssetManager emulation on top of DATA_PATH/obb ----------------------------
 #define TAG_ASSET_MGR 0x41534D47
@@ -94,6 +95,13 @@ static jni_method methods[] = {
   { "GetExternalStorageDirectory",(uintptr_t)storage_ext },{ "GetInternalStorageDirectory",(uintptr_t)storage_int },
   { "GetObbDirectory",      (uintptr_t)storage_obb },{ "GetCacheDirectory",(uintptr_t)storage_int },
   { "IsExternalStorageAvailable",(uintptr_t)ret1 },
+  { "GetPrimaryExternalStorageDirectoryRoot",(uintptr_t)storage_ext },
+  { "GetPrimaryExternalStorageDirectory",(uintptr_t)storage_ext },
+  { "GetPrimaryExternalStorageState",(uintptr_t)ret1 },
+  // android/media/AudioTrack via EAAudioCore Java helper — PCM sink; real SceAudio output comes later
+  { "play",                 (uintptr_t)retv }, { "stop",              (uintptr_t)retv },
+  { "write",                (uintptr_t)audio_write },
+  { "Startup",              (uintptr_t)retv }, { "Shutdown",          (uintptr_t)retv },
   // com/ea/blast/MainActivity / DisplayAndroidDelegate
   { "GetDisplayWidth",      (uintptr_t)screen_w },{ "GetDisplayHeight",(uintptr_t)screen_h },
   { "GetDisplayDensity",    (uintptr_t)density },{ "GetApiLevel",      (uintptr_t)api_level },
