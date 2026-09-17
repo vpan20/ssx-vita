@@ -32,7 +32,7 @@ static int audio_write(uintptr_t obj, int *arr, int off, int len) { return len; 
 #define TAG_ASSET_MGR 0x41534D47
 #define TAG_STREAM    0x41535452
 typedef struct { int tag; } AssetMgr;
-typedef struct { int tag; SceUID fd; long size; long pos; } AssetStream;
+typedef struct { int tag; SceUID fd; long size; long pos; char *mem; } AssetStream;
 static AssetMgr fake_asset_mgr = { TAG_ASSET_MGR };
 void *fake_asset_manager = &fake_asset_mgr;
 
@@ -41,6 +41,31 @@ static void asset_path(char *out, size_t n, const char *name) {
   while (*name == '/') name++;
   snprintf(out, n, DATA_PATH "/obb/%s", name);
 }
+// ---- memory.cfg rewrite: Android heap table is ~370MB; Vita gets ~235MB. Applied to the in-memory copy only.
+static const char *memcfg_rules[][2] = {
+  { "AUDIODATA_GEN\t\tPPMallocMutex\t\t\t[ size={{pc}?20M:100M}", "AUDIODATA_GEN\t\tPPMallocMutex\t\t\t[ size={{pc}?20M:30M}" },
+  { "GLOBAL_GEN\t\t\tPPMallocMutex\t\t\t[ size=45M",             "GLOBAL_GEN\t\t\tPPMallocMutex\t\t\t[ size=32M" },
+  { "GLOBAL_ASSETTMP\t\tPPMallocMutex\t\t\t[ size=35M",          "GLOBAL_ASSETTMP\t\tPPMallocMutex\t\t\t[ size=20M" },
+  { "FE_SFGFX_GEN_A      PPMallocMutex\t\t\t[ size=15M",          "FE_SFGFX_GEN_A      PPMallocMutex\t\t\t[ size=10M" },
+  { "FE_SFGFX_ASCRIPT\tPPMallocMutex\t\t\t[ size=10M",            "FE_SFGFX_ASCRIPT\tPPMallocMutex\t\t\t[ size=5M" },
+  { "FE_SFGFX_REN_SBA\tDynamicSBA4KMutex\t\t[ size=10M",          "FE_SFGFX_REN_SBA\tDynamicSBA4KMutex\t\t[ size=5M" },
+  { "FE_SFGFX_RENDER\t\tPPMallocMutex\t\t\t[ size=10M",           "FE_SFGFX_RENDER\t\tPPMallocMutex\t\t\t[ size=5M" },
+  { "AddAllocator.android\t\tGAMEWORLD_SLOTALLOC\tPPMallocMutex\t\t\t[ size=25M", "AddAllocator.android\t\tGAMEWORLD_SLOTALLOC\tPPMallocMutex\t\t\t[ size=15M" },
+  { "AddAllocator.android\t\tAUDIO_RWAC\t\tPPMallocMutex\t\t\t[ size=10M",       "AddAllocator.android\t\tAUDIO_RWAC\t\tPPMallocMutex\t\t\t[ size=5M" },
+};
+static char *rewrite_memcfg(char *buf, long *size) {
+  for (unsigned r = 0; r < sizeof(memcfg_rules)/sizeof(memcfg_rules[0]); r++) {
+    const char *f = memcfg_rules[r][0], *t = memcfg_rules[r][1]; size_t fl = strlen(f), tl = strlen(t);
+    char *hit = NULL;
+    for (long i = 0; i + (long)fl <= *size; i++) if (buf[i] == f[0] && !memcmp(buf + i, f, fl)) { hit = buf + i; break; }
+    if (!hit) { debugPrintf("memory.cfg: rule %u no match\n", r); continue; }
+    long off = hit - buf, tail = *size - off - fl;
+    if (tl != fl) { char *nb = malloc(*size - fl + tl + 1); memcpy(nb, buf, off); memcpy(nb + off, t, tl); memcpy(nb + off + tl, buf + off + fl, tail); free(buf); buf = nb; *size = *size - fl + tl; }
+    else memcpy(hit, t, tl);
+    debugPrintf("memory.cfg: rule %u applied\n", r);
+  }
+  buf[*size] = 0; return buf;
+}
 static AssetStream *asset_open(const char *name) {
   char p[512]; asset_path(p, sizeof p, name);
   SceUID fd = sceIoOpen(p, SCE_O_RDONLY, 0);
@@ -48,23 +73,32 @@ static AssetStream *asset_open(const char *name) {
   AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
   s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
   debugPrintf("asset open %s (%ld bytes)\n", name, s->size);
+  size_t nl = strlen(name);
+  if (nl >= 10 && !strcmp(name + nl - 10, "memory.cfg")) {
+    char *buf = malloc(s->size + 1); long got = 0;
+    while (got < s->size) { int r = sceIoRead(fd, buf + got, s->size - got); if (r <= 0) break; got += r; }
+    sceIoClose(fd); s->fd = -1; s->size = got; s->mem = rewrite_memcfg(buf, &s->size);
+  }
   return s;
 }
 static int asset_read(AssetStream *s, int *jarr, int off, int len) {
   if (!s || s->tag != TAG_STREAM) return -1;
   if (s->pos >= s->size) return -1;
-  int n = sceIoRead(s->fd, (char *)(jarr + 1) + off, len);
+  int n;
+  if (s->mem) { n = len; if (n > s->size - s->pos) n = s->size - s->pos; memcpy((char *)(jarr + 1) + off, s->mem + s->pos, n); }
+  else n = sceIoRead(s->fd, (char *)(jarr + 1) + off, len);
   if (n > 0) s->pos += n;
   return n > 0 ? n : -1;
 }
 static long long asset_skip(AssetStream *s, long long n) {
   if (!s || s->tag != TAG_STREAM) return 0;
   long np = s->pos + (long)n; if (np > s->size) np = s->size;
-  sceIoLseek(s->fd, np, SCE_SEEK_SET); long long d = np - s->pos; s->pos = np; return d;
+  if (!s->mem) sceIoLseek(s->fd, np, SCE_SEEK_SET); long long d = np - s->pos; s->pos = np; return d;
 }
 static void asset_close(AssetStream *s) {
   if (!s || s->tag != TAG_STREAM) return;
-  sceIoClose(s->fd); s->tag = 0; free(s);
+  if (s->mem) free(s->mem); else sceIoClose(s->fd);
+  s->tag = 0; free(s);
 }
 static int *asset_list(const char *name) {
   char p[512]; asset_path(p, sizeof p, name);

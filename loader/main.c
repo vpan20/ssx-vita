@@ -41,27 +41,6 @@ static void fatal(const char *msg) {
 }
 
 
-// ---- Memory budget patch: the game's allocator table is a text script in .rodata. Sizes are
-// rewritten in place (same length, base-10 parser so leading zeros are safe). Android total ~370MB → ~230MB.
-static void patch_text(so_module *mod, const char *find, const char *repl) {
-  size_t fl = strlen(find); if (fl != strlen(repl)) { debugPrintf("patch len mismatch: %s\n", find); return; }
-  char *base = (char *)mod->text_base; size_t n = mod->text_size; int hits = 0;
-  for (size_t i = 0; i + fl <= n; i++) {
-    if (base[i] == find[0] && !memcmp(base + i, find, fl)) { kuKernelCpuUnrestrictedMemcpy(base + i, repl, fl); hits++; i += fl - 1; }
-  }
-  debugPrintf("patch '%s' -> '%s': %d hit(s)\n", find, repl, hits);
-}
-static void patch_memory_budget(so_module *mod) {
-  patch_text(mod, "AUDIODATA_GEN\t\tPPMallocMutex\t\t\t[ size={{pc}?20M:100M}",   "AUDIODATA_GEN\t\tPPMallocMutex\t\t\t[ size={{pc}?20M:030M}");
-  patch_text(mod, "GLOBAL_GEN\t\t\tPPMallocMutex\t\t\t[ size=45M",               "GLOBAL_GEN\t\t\tPPMallocMutex\t\t\t[ size=32M");
-  patch_text(mod, "GLOBAL_ASSETTMP\t\tPPMallocMutex\t\t\t[ size=35M",            "GLOBAL_ASSETTMP\t\tPPMallocMutex\t\t\t[ size=20M");
-  patch_text(mod, "FE_SFGFX_GEN_A      PPMallocMutex\t\t\t[ size=15M",            "FE_SFGFX_GEN_A      PPMallocMutex\t\t\t[ size=10M");
-  patch_text(mod, "FE_SFGFX_ASCRIPT\tPPMallocMutex\t\t\t[ size=10M",              "FE_SFGFX_ASCRIPT\tPPMallocMutex\t\t\t[ size=05M");
-  patch_text(mod, "FE_SFGFX_REN_SBA\tDynamicSBA4KMutex\t\t[ size=10M",            "FE_SFGFX_REN_SBA\tDynamicSBA4KMutex\t\t[ size=05M");
-  patch_text(mod, "FE_SFGFX_RENDER\t\tPPMallocMutex\t\t\t[ size=10M",             "FE_SFGFX_RENDER\t\tPPMallocMutex\t\t\t[ size=05M");
-  patch_text(mod, "AddAllocator.android\t\tGAMEWORLD_SLOTALLOC\tPPMallocMutex\t\t\t[ size=25M", "AddAllocator.android\t\tGAMEWORLD_SLOTALLOC\tPPMallocMutex\t\t\t[ size=15M");
-  patch_text(mod, "AddAllocator.android\t\tAUDIO_RWAC\t\tPPMallocMutex\t\t\t[ size=10M",       "AddAllocator.android\t\tAUDIO_RWAC\t\tPPMallocMutex\t\t\t[ size=05M");
-}
 
 static int file_exists(const char *p) { SceIoStat s; return sceIoGetstat(p, &s) >= 0; }
 
@@ -88,7 +67,6 @@ int main(int argc, char *argv[]) {
   so_relocate(&game_mod);             debugPrintf("relocate ok\n");
   so_resolve(&game_mod, default_dynlib, default_dynlib_size, 0); debugPrintf("resolve ok\n");
   // TODO(step 4): patch_game() — hook allocator sizes / disable Nimble init / skip vp6 replays once addresses are known from Ghidra.
-  patch_memory_budget(&game_mod);
   so_flush_caches(&game_mod);         debugPrintf("flush ok\n");
   so_initialize(&game_mod);           debugPrintf("initialize ok (static constructors ran)\n");
 
