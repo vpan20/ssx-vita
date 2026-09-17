@@ -108,6 +108,7 @@ static jni_method methods[] = {
   // com/ea/VideoPlayer/PlayerAndroid — stubbed: report immediate completion
   { "Play",                 (uintptr_t)retv },{ "Stop",              (uintptr_t)retv },
   { "IsPlaying",            (uintptr_t)ret0 },
+  { "<init>",               (uintptr_t)ret1 },
   // com/ea/EAActivityArguments
   { "GetArgumentCount",     (uintptr_t)ret0 },
 };
@@ -188,7 +189,7 @@ static void  CallVoidMethodA(void *env,uintptr_t obj,int mid,uintptr_t*a){ if(mi
 // ---- strings / arrays / refs -------------------------------------------------
 static char *NewStringUTF(void *env, const char *s) { return s ? strdup(s) : NULL; }
 char *jni_new_string(const char *s) { return strdup(s); }
-static const char *GetStringUTFChars(void *env, char *s, int *isCopy) { if (isCopy) *isCopy = 0; return s; }
+static const char *GetStringUTFChars(void *env, char *s, int *isCopy) { if (isCopy) *isCopy = 0; return s ? s : ""; }
 static void ReleaseStringUTFChars(void *env, char *s, const char *c) {}
 static int GetStringUTFLength(void *env, char *s) { return s ? (int)strlen(s) : 0; }
 static int GetStringLength(void *env, char *s) { return s ? (int)strlen(s) : 0; }
@@ -230,7 +231,7 @@ static int  IsSameObject(void *env, void *a, void *b) { return a == b; }
 // ---- JNINativeInterface: 229-slot function table. Only slots we implement are set; the rest
 // point at a logging trap so a crash here is diagnosable instead of a silent jump to 0.
 static void jni_trap(void) { debugPrintf("JNI: unimplemented JNIEnv slot called\n"); abort(); }
-static void *env_table[229];
+static void *env_table[233];
 static void **env_ptr = env_table;
 void *fake_env = &env_ptr;
 
@@ -241,39 +242,267 @@ static void *vm_table[8];
 static void **vm_ptr = vm_table;
 void *fake_vm = &vm_ptr;
 
+// ---- generic fillers for slots not needing real behaviour ----
+static int  g_ret0(void) { return 0; }
+static void g_void(void) {}
+static void *g_self(void *env, void *o) { return o; }          // NewLocalRef / NewWeakGlobalRef / Get*Elements-style identity
+static int  g_ret1(void) { return 1; }
+static long long g_ret0l(void) { return 0; }
+static float g_ret0f(void) { return 0.0f; }
+static double g_ret0d(void) { return 0.0; }
+// element sizes for typed arrays: layout is [len][data...]
+static int *g_newarr(void *env, int n, int esz) { int *a = calloc(1, 4 + n * esz); a[0] = n; return a; }
+static int *NewBooleanArray(void *e, int n) { return g_newarr(e, n, 1); }
+static int *NewCharArray(void *e, int n)    { return g_newarr(e, n, 2); }
+static int *NewShortArray(void *e, int n)   { return g_newarr(e, n, 2); }
+static int *NewLongArray(void *e, int n)    { return g_newarr(e, n, 8); }
+static int *NewFloatArray(void *e, int n)   { return g_newarr(e, n, 4); }
+static int *NewDoubleArray(void *e, int n)  { return g_newarr(e, n, 8); }
+static void *g_elems(void *env, int *a, int *isCopy) { if (isCopy) *isCopy = 0; return a + 1; }
+static void g_release(void *env, int *a, void *e, int mode) {}
+#define REGION_GET(esz) static void g_getregion##esz(void *env, int *a, int start, int len, void *buf) { memcpy(buf, (char *)(a + 1) + start * esz, len * esz); }
+#define REGION_SET(esz) static void g_setregion##esz(void *env, int *a, int start, int len, const void *buf) { memcpy((char *)(a + 1) + start * esz, buf, len * esz); }
+REGION_GET(1) REGION_GET(2) REGION_GET(4) REGION_GET(8) REGION_SET(1) REGION_SET(2) REGION_SET(4) REGION_SET(8)
+static void *NewObjectV(void *env, int c, int m, va_list a) { return (void *)1; }
+static void *NewObjectA(void *env, int c, int m, void *a) { return (void *)1; }
+static void *NewString(void *env, const unsigned short *s, int len) { char *r = calloc(1, len + 1); for (int i = 0; i < len; i++) r[i] = (char)s[i]; return r; }
+static const unsigned short *GetStringChars(void *env, const char *s, int *c) { int n = strlen(s); unsigned short *r = calloc(n + 1, 2); for (int i = 0; i < n; i++) r[i] = (unsigned char)s[i]; if (c) *c = 1; return r; }
+static void ReleaseStringChars(void *env, const char *s, const unsigned short *c) { free((void *)c); }
+static void GetStringUTFRegion(void *env, const char *s, int start, int len, char *buf) { memcpy(buf, s + start, len); buf[len] = 0; }
+static int  Throw(void *env, void *o) { debugPrintf("JNI: Throw\n"); return 0; }
+static int  ThrowNew(void *env, int c, const char *m) { debugPrintf("JNI: ThrowNew %s\n", m ? m : ""); return 0; }
+static void ExceptionDescribe(void *env) {}
+static void FatalError(void *env, const char *m) { debugPrintf("JNI: FatalError %s\n", m ? m : ""); abort(); }
+static int  IsInstanceOf(void *env, void *o, int c) { return 1; }
+static int  IsAssignableFrom(void *env, int a, int b) { return 1; }
+
 #define SLOT(n, f) env_table[n] = (void *)f
 void jni_init(void) {
-  for (int i = 0; i < 229; i++) env_table[i] = (void *)jni_trap;
-  SLOT(4, GetVersion);      SLOT(6, FindClass);          SLOT(15, ExceptionOccurred);
-  SLOT(17, ExceptionClear); SLOT(19, PushLocalFrame);    SLOT(20, PopLocalFrame);
-  SLOT(21, NewGlobalRef);   SLOT(22, DeleteGlobalRef);   SLOT(23, DeleteLocalRef);
-  SLOT(24, IsSameObject);   SLOT(28, NewObject);         SLOT(31, GetObjectClass);
+  for (int i = 0; i < 233; i++) env_table[i] = (void *)jni_trap;
+  SLOT(4, GetVersion);
+  SLOT(6, FindClass);
+  SLOT(10, g_ret0);
+  SLOT(11, IsAssignableFrom);
+  SLOT(13, Throw);
+  SLOT(14, ThrowNew);
+  SLOT(15, ExceptionOccurred);
+  SLOT(16, ExceptionDescribe);
+  SLOT(17, ExceptionClear);
+  SLOT(18, FatalError);
+  SLOT(19, PushLocalFrame);
+  SLOT(20, PopLocalFrame);
+  SLOT(21, NewGlobalRef);
+  SLOT(22, DeleteGlobalRef);
+  SLOT(23, DeleteLocalRef);
+  SLOT(24, IsSameObject);
+  SLOT(25, g_self);
+  SLOT(26, g_ret0);
+  SLOT(27, g_ret1);
+  SLOT(28, NewObject);
+  SLOT(29, NewObjectV);
+  SLOT(30, NewObjectA);
+  SLOT(31, GetObjectClass);
+  SLOT(32, IsInstanceOf);
   SLOT(33, GetMethodID);
-  SLOT(34, CallObjectMethod); SLOT(35, CallObjectMethodV); SLOT(36, CallObjectMethodA);
-  SLOT(37, CallBooleanMethod);SLOT(38, CallBooleanMethodV);SLOT(39, CallBooleanMethodA);
-  SLOT(49, CallIntMethod);    SLOT(50, CallIntMethodV);    SLOT(51, CallIntMethodA);
-  SLOT(52, CallLongMethod);   SLOT(53, CallLongMethodV);   SLOT(54, CallLongMethodA);
-  SLOT(55, CallFloatMethod);  SLOT(56, CallFloatMethodV);
-  SLOT(61, CallVoidMethod);   SLOT(62, CallVoidMethodV);   SLOT(63, CallVoidMethodA);
-  SLOT(94, GetFieldID);       SLOT(95, GetObjectField);    SLOT(100, GetIntField);
-  SLOT(113, GetMethodID);     /* GetStaticMethodID → same resolver */
-  SLOT(114, CallObjectMethod);SLOT(115, CallObjectMethodV);SLOT(116, CallObjectMethodA);
-  SLOT(117, CallBooleanMethod);SLOT(118, CallBooleanMethodV);SLOT(119, CallBooleanMethodA);
-  SLOT(129, CallIntMethod);   SLOT(130, CallIntMethodV);   SLOT(131, CallIntMethodA);
-  SLOT(132, CallLongMethod);  SLOT(133, CallLongMethodV);  SLOT(134, CallLongMethodA);
-  SLOT(135, CallFloatMethod); SLOT(136, CallFloatMethodV);
-  SLOT(141, CallVoidMethod);  SLOT(142, CallVoidMethodV);  SLOT(143, CallVoidMethodA);
-  SLOT(144, GetStaticFieldID);SLOT(145, GetStaticObjectField); SLOT(150, GetStaticIntField);
-  SLOT(164, GetStringLength); SLOT(167, NewStringUTF);     SLOT(168, GetStringUTFLength);
-  SLOT(169, GetStringUTFChars);SLOT(170, ReleaseStringUTFChars);
-  SLOT(171, GetArrayLength);  SLOT(172, NewObjectArray);   SLOT(173, GetObjectArrayElement);
-  SLOT(174, SetObjectArrayElement); SLOT(176, NewByteArray); SLOT(179, NewIntArray);
-  SLOT(184, GetByteArrayElements); SLOT(187, GetIntArrayElements);
-  SLOT(192, ReleaseByteArrayElements); SLOT(195, ReleaseIntArrayElements);
-  SLOT(200, GetByteArrayRegion); SLOT(208, SetByteArrayRegion);
-  SLOT(215, RegisterNatives); SLOT(219, GetJavaVM);
-  SLOT(222, GetPrimitiveArrayCritical); SLOT(223, ReleasePrimitiveArrayCritical);
+  SLOT(113, GetMethodID);
+  SLOT(34, CallObjectMethod);
+  SLOT(35, CallObjectMethodV);
+  SLOT(36, CallObjectMethodA);
+  SLOT(37, CallBooleanMethod);
+  SLOT(38, CallBooleanMethodV);
+  SLOT(39, CallBooleanMethodA);
+  SLOT(40, CallIntMethod);
+  SLOT(41, CallIntMethodV);
+  SLOT(42, CallIntMethodA);
+  SLOT(43, CallIntMethod);
+  SLOT(44, CallIntMethodV);
+  SLOT(45, CallIntMethodA);
+  SLOT(46, CallIntMethod);
+  SLOT(47, CallIntMethodV);
+  SLOT(48, CallIntMethodA);
+  SLOT(49, CallIntMethod);
+  SLOT(50, CallIntMethodV);
+  SLOT(51, CallIntMethodA);
+  SLOT(52, CallLongMethod);
+  SLOT(53, CallLongMethodV);
+  SLOT(54, CallLongMethodA);
+  SLOT(55, CallFloatMethod);
+  SLOT(56, CallFloatMethodV);
+  SLOT(57, g_ret0f);
+  SLOT(58, g_ret0d);
+  SLOT(59, g_ret0d);
+  SLOT(60, g_ret0d);
+  SLOT(61, CallVoidMethod);
+  SLOT(62, CallVoidMethodV);
+  SLOT(63, CallVoidMethodA);
+  SLOT(64, g_ret0);
+  SLOT(65, g_ret0);
+  SLOT(66, g_ret0);
+  SLOT(67, g_ret0);
+  SLOT(68, g_ret0);
+  SLOT(69, g_ret0);
+  SLOT(70, g_ret0);
+  SLOT(71, g_ret0);
+  SLOT(72, g_ret0);
+  SLOT(73, g_ret0);
+  SLOT(74, g_ret0);
+  SLOT(75, g_ret0);
+  SLOT(76, g_ret0);
+  SLOT(77, g_ret0);
+  SLOT(78, g_ret0);
+  SLOT(79, g_ret0);
+  SLOT(80, g_ret0);
+  SLOT(81, g_ret0);
+  SLOT(82, g_ret0);
+  SLOT(83, g_ret0);
+  SLOT(84, g_ret0);
+  SLOT(85, g_ret0);
+  SLOT(86, g_ret0);
+  SLOT(87, g_ret0);
+  SLOT(88, g_ret0);
+  SLOT(89, g_ret0);
+  SLOT(90, g_ret0);
+  SLOT(91, g_ret0);
+  SLOT(92, g_ret0);
+  SLOT(93, g_ret0);
+  SLOT(114, CallObjectMethod);
+  SLOT(115, CallObjectMethodV);
+  SLOT(116, CallObjectMethodA);
+  SLOT(117, CallBooleanMethod);
+  SLOT(118, CallBooleanMethodV);
+  SLOT(119, CallBooleanMethodA);
+  SLOT(120, CallIntMethod);
+  SLOT(121, CallIntMethodV);
+  SLOT(122, CallIntMethodA);
+  SLOT(123, CallIntMethod);
+  SLOT(124, CallIntMethodV);
+  SLOT(125, CallIntMethodA);
+  SLOT(126, CallIntMethod);
+  SLOT(127, CallIntMethodV);
+  SLOT(128, CallIntMethodA);
+  SLOT(129, CallIntMethod);
+  SLOT(130, CallIntMethodV);
+  SLOT(131, CallIntMethodA);
+  SLOT(132, CallLongMethod);
+  SLOT(133, CallLongMethodV);
+  SLOT(134, CallLongMethodA);
+  SLOT(135, CallFloatMethod);
+  SLOT(136, CallFloatMethodV);
+  SLOT(137, g_ret0f);
+  SLOT(138, g_ret0d);
+  SLOT(139, g_ret0d);
+  SLOT(140, g_ret0d);
+  SLOT(141, CallVoidMethod);
+  SLOT(142, CallVoidMethodV);
+  SLOT(143, CallVoidMethodA);
+  SLOT(94, GetFieldID);
+  SLOT(144, GetStaticFieldID);
+  SLOT(95, g_ret0);
+  SLOT(96, g_ret0);
+  SLOT(97, g_ret0);
+  SLOT(98, g_ret0);
+  SLOT(99, g_ret0);
+  SLOT(100, g_ret0);
+  SLOT(101, g_ret0l);
+  SLOT(102, g_ret0f);
+  SLOT(103, g_ret0d);
+  SLOT(145, g_ret0);
+  SLOT(146, g_ret0);
+  SLOT(147, g_ret0);
+  SLOT(148, g_ret0);
+  SLOT(149, g_ret0);
+  SLOT(150, g_ret0);
+  SLOT(151, g_ret0l);
+  SLOT(152, g_ret0f);
+  SLOT(153, g_ret0d);
+  SLOT(104, g_void);
+  SLOT(105, g_void);
+  SLOT(106, g_void);
+  SLOT(107, g_void);
+  SLOT(108, g_void);
+  SLOT(109, g_void);
+  SLOT(110, g_void);
+  SLOT(111, g_void);
+  SLOT(112, g_void);
+  SLOT(154, g_void);
+  SLOT(155, g_void);
+  SLOT(156, g_void);
+  SLOT(157, g_void);
+  SLOT(158, g_void);
+  SLOT(159, g_void);
+  SLOT(160, g_void);
+  SLOT(161, g_void);
+  SLOT(162, g_void);
+  SLOT(163, NewString);
+  SLOT(164, GetStringLength);
+  SLOT(165, GetStringChars);
+  SLOT(166, ReleaseStringChars);
+  SLOT(167, NewStringUTF);
+  SLOT(168, GetStringUTFLength);
+  SLOT(169, GetStringUTFChars);
+  SLOT(170, ReleaseStringUTFChars);
+  SLOT(171, GetArrayLength);
+  SLOT(172, NewObjectArray);
+  SLOT(173, GetObjectArrayElement);
+  SLOT(174, SetObjectArrayElement);
+  SLOT(175, NewBooleanArray);
+  SLOT(176, NewByteArray);
+  SLOT(177, NewCharArray);
+  SLOT(178, NewShortArray);
+  SLOT(179, NewIntArray);
+  SLOT(180, NewLongArray);
+  SLOT(181, NewFloatArray);
+  SLOT(182, NewDoubleArray);
+  SLOT(183, g_elems);
+  SLOT(191, g_release);
+  SLOT(199, g_getregion1);
+  SLOT(207, g_setregion1);
+  SLOT(184, g_elems);
+  SLOT(192, g_release);
+  SLOT(200, g_getregion1);
+  SLOT(208, g_setregion1);
+  SLOT(185, g_elems);
+  SLOT(193, g_release);
+  SLOT(201, g_getregion2);
+  SLOT(209, g_setregion2);
+  SLOT(186, g_elems);
+  SLOT(194, g_release);
+  SLOT(202, g_getregion2);
+  SLOT(210, g_setregion2);
+  SLOT(187, g_elems);
+  SLOT(195, g_release);
+  SLOT(203, g_getregion4);
+  SLOT(211, g_setregion4);
+  SLOT(188, g_elems);
+  SLOT(196, g_release);
+  SLOT(204, g_getregion8);
+  SLOT(212, g_setregion8);
+  SLOT(189, g_elems);
+  SLOT(197, g_release);
+  SLOT(205, g_getregion4);
+  SLOT(213, g_setregion4);
+  SLOT(190, g_elems);
+  SLOT(198, g_release);
+  SLOT(206, g_getregion8);
+  SLOT(214, g_setregion8);
+  SLOT(215, RegisterNatives);
+  SLOT(216, g_ret0);
+  SLOT(217, g_ret0);
+  SLOT(218, g_ret0);
+  SLOT(219, GetJavaVM);
+  SLOT(220, g_void);
+  SLOT(221, GetStringUTFRegion);
+  SLOT(222, GetPrimitiveArrayCritical);
+  SLOT(223, ReleasePrimitiveArrayCritical);
+  SLOT(224, GetStringChars);
+  SLOT(225, ReleaseStringChars);
+  SLOT(226, g_self);
+  SLOT(227, g_void);
   SLOT(228, ExceptionCheck);
+  SLOT(229, g_ret0);
+  SLOT(230, g_ret0);
+  SLOT(231, g_ret0);
+  SLOT(232, g_ret1);
   vm_table[4] = (void *)JavaVM_AttachCurrentThread; vm_table[5] = (void *)JavaVM_DetachCurrentThread;
   vm_table[6] = (void *)JavaVM_GetEnv; vm_table[7] = (void *)JavaVM_AttachCurrentThread;
 }
