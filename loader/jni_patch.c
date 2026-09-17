@@ -41,28 +41,34 @@ static void asset_path(char *out, size_t n, const char *name) {
   while (*name == '/') name++;
   snprintf(out, n, DATA_PATH "/obb/%s", name);
 }
-// ---- memory.cfg rewrite: Android heap table is ~370MB; Vita gets ~235MB. Applied to the in-memory copy only.
-static const char *memcfg_rules[][2] = {
-  { "AUDIODATA_GEN\t\tPPMallocMutex\t\t\t[ size={{pc}?20M:100M}", "AUDIODATA_GEN\t\tPPMallocMutex\t\t\t[ size={{pc}?20M:30M}" },
-  { "GLOBAL_GEN\t\t\tPPMallocMutex\t\t\t[ size=45M",             "GLOBAL_GEN\t\t\tPPMallocMutex\t\t\t[ size=32M" },
-  { "GLOBAL_ASSETTMP\t\tPPMallocMutex\t\t\t[ size=35M",          "GLOBAL_ASSETTMP\t\tPPMallocMutex\t\t\t[ size=20M" },
-  { "FE_SFGFX_GEN_A      PPMallocMutex\t\t\t[ size=15M",          "FE_SFGFX_GEN_A      PPMallocMutex\t\t\t[ size=10M" },
-  { "FE_SFGFX_ASCRIPT\tPPMallocMutex\t\t\t[ size=10M",            "FE_SFGFX_ASCRIPT\tPPMallocMutex\t\t\t[ size=5M" },
-  { "FE_SFGFX_REN_SBA\tDynamicSBA4KMutex\t\t[ size=10M",          "FE_SFGFX_REN_SBA\tDynamicSBA4KMutex\t\t[ size=5M" },
-  { "FE_SFGFX_RENDER\t\tPPMallocMutex\t\t\t[ size=10M",           "FE_SFGFX_RENDER\t\tPPMallocMutex\t\t\t[ size=5M" },
-  { "AddAllocator.android\t\tGAMEWORLD_SLOTALLOC\tPPMallocMutex\t\t\t[ size=25M", "AddAllocator.android\t\tGAMEWORLD_SLOTALLOC\tPPMallocMutex\t\t\t[ size=15M" },
-  { "AddAllocator.android\t\tAUDIO_RWAC\t\tPPMallocMutex\t\t\t[ size=10M",       "AddAllocator.android\t\tAUDIO_RWAC\t\tPPMallocMutex\t\t\t[ size=5M" },
+// ---- memory.cfg rewrite: Android heap table totals 393MB; Vita budget ~200MB. Rules match by allocator
+// name (whitespace-delimited) and replace the whole size=... token, so conditionals like {{pc}?20M:100M} are
+// dropped. Applied to the in-memory copy only; the file on the card is untouched.
+static const struct { const char *name; const char *size; } memcfg_rules[] = {
+  { "AUDIODATA_GEN", "24M" },   { "GAMEPLAY_GEN", "16M" },     { "GAMEWORLD_GEN", "16M" },
+  { "GLOBAL_GEN", "30M" },      { "STL_GEN", "8M" },           { "FE_GEN", "8M" },
+  { "FE_SFGFX_GEN_A", "12M" },  { "FE_SFGFX_GEN_B", "3M" },    { "FE_SFGFX_AS_SBA", "2M" },
+  { "FE_SFGFX_ASCRIPT", "6M" }, { "FE_SFGFX_REN_SBA", "4M" },  { "FE_SFGFX_RENDER", "5M" },
+  { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "16M" },  { "GAMEWORLD_SLOTALLOC", "12M" },
+  { "ASSETSTREAM_READBUF", "3M" }, { "AUDIO_RWAC", "4M" },
 };
+static int is_ws(char c) { return c == ' ' || c == '\t'; }
 static char *rewrite_memcfg(char *buf, long *size) {
   for (unsigned r = 0; r < sizeof(memcfg_rules)/sizeof(memcfg_rules[0]); r++) {
-    const char *f = memcfg_rules[r][0], *t = memcfg_rules[r][1]; size_t fl = strlen(f), tl = strlen(t);
-    char *hit = NULL;
-    for (long i = 0; i + (long)fl <= *size; i++) if (buf[i] == f[0] && !memcmp(buf + i, f, fl)) { hit = buf + i; break; }
-    if (!hit) { debugPrintf("memory.cfg: rule %u no match\n", r); continue; }
-    long off = hit - buf, tail = *size - off - fl;
-    if (tl != fl) { char *nb = malloc(*size - fl + tl + 1); memcpy(nb, buf, off); memcpy(nb + off, t, tl); memcpy(nb + off + tl, buf + off + fl, tail); free(buf); buf = nb; *size = *size - fl + tl; }
-    else memcpy(hit, t, tl);
-    debugPrintf("memory.cfg: rule %u applied\n", r);
+    const char *name = memcfg_rules[r].name; size_t nl = strlen(name); int hits = 0;
+    for (long i = 0; i + (long)nl < *size; i++) {
+      if (memcmp(buf + i, name, nl) || !(i == 0 || is_ws(buf[i-1])) || !is_ws(buf[i + nl])) continue;
+      // find "size=" on this line
+      long j = i + nl; while (j < *size && buf[j] != '\n' && memcmp(buf + j, "size=", 5)) j++;
+      if (j >= *size || buf[j] == '\n') continue;
+      long vs = j + 5, ve = vs; int depth = 0;
+      while (ve < *size) { char c = buf[ve]; if (c == '{') depth++; else if (c == '}') depth--; else if (depth == 0 && (c == ',' || c == ']' || c == ' ' || c == '\n')) break; ve++; }
+      long ol = ve - vs, tl = strlen(memcfg_rules[r].size);
+      char *nb = malloc(*size - ol + tl + 1);
+      memcpy(nb, buf, vs); memcpy(nb + vs, memcfg_rules[r].size, tl); memcpy(nb + vs + tl, buf + ve, *size - ve);
+      free(buf); buf = nb; *size = *size - ol + tl; hits++; i = vs + tl;
+    }
+    debugPrintf("memory.cfg: %s -> %s (%d line%s)\n", name, memcfg_rules[r].size, hits, hits == 1 ? "" : "s");
   }
   buf[*size] = 0; return buf;
 }
