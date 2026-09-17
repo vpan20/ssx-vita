@@ -26,6 +26,15 @@ static int screen_h(void)           { return 544; }
 static int api_level(void)          { return 14; }
 static float density(void)          { return 1.0f; }
 static int egl_ok(void)             { return 1; }
+// Device identity — report as Xperia Z1 (C6903) so the game selects the config EA shipped for this exact device
+static const char *dev_model(void)   { return "C6903"; }
+static const char *dev_maker(void)   { return "Sony"; }
+static const char *dev_chipset(void) { return "MSM8974"; }
+static const char *dev_fw(void)      { return "4.4.4"; }
+static const char *dev_uid(void)     { return "0123456789abcdef"; }
+static const char *dev_fp(void)      { return "neon vfpv3"; }
+static const char *app_ver(void)     { return "0.0.7833"; }
+static int app_vercode(void)         { return 7833; }
 static int audio_write(uintptr_t obj, int *arr, int off, int len) { return len; }  // pretend consumed   // all EGL10.* calls report success; VitaGL owns the context
 
 // ---- Android AssetManager emulation on top of DATA_PATH/obb ----------------------------
@@ -158,6 +167,14 @@ static jni_method methods[] = {
   { "Play",                 (uintptr_t)retv },{ "Stop",              (uintptr_t)retv },
   { "IsPlaying",            (uintptr_t)ret0 },
   { "<init>",               (uintptr_t)ret1 },
+  // device capability queries (DeviceAndroid delegate)
+  { "GetAccelerometerCount", (uintptr_t)ret0 }, { "GetCameraCount", (uintptr_t)ret0 }, { "GetCompassCount", (uintptr_t)ret0 },
+  { "GetGyroscopeCount", (uintptr_t)ret0 }, { "GetMicrophoneCount", (uintptr_t)ret0 }, { "GetTouchPadCount", (uintptr_t)ret0 },
+  { "GetTouchScreenCount", (uintptr_t)ret1 }, { "GetTrackBallCount", (uintptr_t)ret0 }, { "GetVibratorCount", (uintptr_t)ret0 },
+  { "GetApplicationVersionCode", (uintptr_t)app_vercode }, { "GetApplicationVersion", (uintptr_t)app_ver },
+  { "GetChipset", (uintptr_t)dev_chipset }, { "GetFirmware", (uintptr_t)dev_fw }, { "GetManufacturer", (uintptr_t)dev_maker },
+  { "GetDeviceModel", (uintptr_t)dev_model }, { "GetDeviceUniqueId", (uintptr_t)dev_uid }, { "GetHardwareFloatingPointSupport", (uintptr_t)dev_fp },
+  { "GetTotalMemory", (uintptr_t)ret1 }, { "GetAvailableMemory", (uintptr_t)ret1 },
   // com/ea/EAActivityArguments
   { "GetArgumentCount",     (uintptr_t)ret0 },
 };
