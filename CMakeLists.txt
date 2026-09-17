@@ -13,7 +13,7 @@ set(VITA_TITLEID  "SSXVITA01")
 set(VITA_VERSION  "00.01")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--allow-multiple-definition -D_GNU_SOURCE -Wall -O3 -mfloat-abi=softfp")
 add_executable(ssx_vita
-  loader/main.c loader/so_util.c loader/jni_patch.c loader/stubs.c loader/default_dynlib.c)
+  loader/main.c loader/so_util.c loader/jni_patch.c loader/stubs.c loader/default_dynlib.c loader/pthread_bridge.c)
 target_link_libraries(ssx_vita
   vitaGL vitashark SceShaccCgExt taihen_stub kubridge_stub mathneon m stdc++ pthread
   SceAppMgr_stub SceAudio_stub SceCtrl_stub SceTouch_stub SceCommonDialog_stub SceDisplay_stub
