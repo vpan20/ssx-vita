@@ -23,7 +23,10 @@ static const char *device_name(void){ return "PS Vita"; }
 static const char *lang(void)       { return "en"; }
 static int screen_w(void)           { return 960; }
 static int screen_h(void)           { return 544; }
-static int api_level(void)          { return 14; }
+static const char *api_level_str(void) { return "19"; }
+static const char *platform_ver(void)  { return "4.4.4"; }
+static const char *proc_arch(void)     { return "armeabi-v7a"; }
+static const char *locale_str(void)    { return "en_US"; }
 static float density(void)          { return 1.0f; }
 static int egl_ok(void)             { return 1; }
 // Device identity — report as Xperia Z1 (C6903) so the game selects the config EA shipped for this exact device
@@ -154,7 +157,7 @@ static jni_method methods[] = {
   { "Startup",              (uintptr_t)retv }, { "Shutdown",          (uintptr_t)retv },
   // com/ea/blast/MainActivity / DisplayAndroidDelegate
   { "GetDisplayWidth",      (uintptr_t)screen_w },{ "GetDisplayHeight",(uintptr_t)screen_h },
-  { "GetDisplayDensity",    (uintptr_t)density },{ "GetApiLevel",      (uintptr_t)api_level },
+  { "GetDisplayDensity",    (uintptr_t)density },{ "GetApiLevel",      (uintptr_t)api_level_str },
   { "GetDeviceName",        (uintptr_t)device_name },{ "GetLanguage",   (uintptr_t)lang },
   { "GetOrientation",       (uintptr_t)ret0 },{ "SetOrientation",   (uintptr_t)retv },
   { "GetBatteryLevel",      (uintptr_t)ret1 },{ "IsPowerConnected",  (uintptr_t)ret1 },
@@ -174,6 +177,7 @@ static jni_method methods[] = {
   { "GetApplicationVersionCode", (uintptr_t)app_vercode }, { "GetApplicationVersion", (uintptr_t)app_ver },
   { "GetChipset", (uintptr_t)dev_chipset }, { "GetFirmware", (uintptr_t)dev_fw }, { "GetManufacturer", (uintptr_t)dev_maker },
   { "GetDeviceModel", (uintptr_t)dev_model }, { "GetDeviceUniqueId", (uintptr_t)dev_uid }, { "GetHardwareFloatingPointSupport", (uintptr_t)dev_fp },
+  { "GetPlatformVersion", (uintptr_t)platform_ver }, { "GetProcessorArchitecture", (uintptr_t)proc_arch }, { "GetLocale", (uintptr_t)locale_str },
   { "GetTotalMemory", (uintptr_t)ret1 }, { "GetAvailableMemory", (uintptr_t)ret1 },
   // com/ea/EAActivityArguments
   { "GetArgumentCount",     (uintptr_t)ret0 },
@@ -255,7 +259,7 @@ static void  CallVoidMethodA(void *env,uintptr_t obj,int mid,uintptr_t*a){ if(mi
 // ---- strings / arrays / refs -------------------------------------------------
 static char *NewStringUTF(void *env, const char *s) { return s ? strdup(s) : NULL; }
 char *jni_new_string(const char *s) { return strdup(s); }
-static const char *GetStringUTFChars(void *env, char *s, int *isCopy) { if (isCopy) *isCopy = 0; return s ? s : ""; }
+static const char *GetStringUTFChars(void *env, char *s, int *isCopy) { if (isCopy) *isCopy = 0; if ((uintptr_t)s < 0x10000) { if (s) debugPrintf("JNI: GetStringUTFChars on non-string %p\n", s); return ""; } return s; }
 static void ReleaseStringUTFChars(void *env, char *s, const char *c) {}
 static int GetStringUTFLength(void *env, char *s) { return s ? (int)strlen(s) : 0; }
 static int GetStringLength(void *env, char *s) { return s ? (int)strlen(s) : 0; }
