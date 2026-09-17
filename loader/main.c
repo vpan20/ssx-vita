@@ -19,6 +19,7 @@
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
 unsigned int sceLibcHeapSize = 8 * 1024 * 1024;
+unsigned int sceUserMainThreadStackSize = 2 * 1024 * 1024;
 extern so_default_dynlib default_dynlib[]; extern int default_dynlib_size;
 
 static so_module game_mod, gnustl_mod;
@@ -36,7 +37,7 @@ static void fatal(const char *msg) {
   debugPrintf("FATAL: %s\n", msg);
   SceMsgDialogUserMessageParam m = { .buttonType = SCE_MSG_DIALOG_BUTTON_TYPE_OK, .msg = (const SceChar8 *)msg };
   SceMsgDialogParam p; sceMsgDialogParamInit(&p); p.mode = SCE_MSG_DIALOG_MODE_USER_MSG; p.userMsgParam = &m;
-  sceMsgDialogInit(&p); while (sceMsgDialogGetStatus() != SCE_COMMON_DIALOG_STATUS_FINISHED) { vglSwapBuffers(GL_TRUE); }
+  sceMsgDialogInit(&p); while (sceMsgDialogGetStatus() != SCE_COMMON_DIALOG_STATUS_FINISHED) { sceDisplayWaitVblankStart(); }
   sceKernelExitProcess(0);
 }
 
@@ -71,6 +72,7 @@ int main(int argc, char *argv[]) {
   // 3. Graphics: VitaGL provides the GLES2 symbols in default_dynlib. Game shaders are GLSL ES → need
   //    VitaGL's runtime translator (vglInitWithCustomThreshold + shark) or precompiled CG. See README §Shaders.
   if (!file_exists("ur0:data/libshacccg.suprx")) fatal("libshacccg.suprx missing — run ShaRKBR33D");
+  debugPrintf("vitaGL init...\n");
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
   debugPrintf("vitaGL ok\n");
 

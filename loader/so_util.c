@@ -353,6 +353,7 @@ void so_initialize(so_module *mod) {
     if (mod->init_array[i]) {
       debugPrintf("init[%d/%d] off=0x%X\n", i, mod->num_init_array, (unsigned)((uintptr_t)mod->init_array[i] - mod->text_base));
       mod->init_array[i]();
+      if (i % 50 == 49) debugPrintf("  ..%d done\n", i);
     }
   }
 }
