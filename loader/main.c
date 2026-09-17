@@ -93,6 +93,8 @@ int main(int argc, char *argv[]) {
   uintptr_t am        = (uintptr_t)fake_asset_manager;
   sceIoMkdir(DATA_PATH "/external", 0777);
 
+  static int fake_activity = 0x41435459;   // any non-null object; the game only keeps a global ref to it
+  { fn_jni f = J("Java_com_ea_ssx_MainActivity_InitGameApplication"); if (f) { f(fake_env, (void *)&fake_activity, 0,0,0,0,0,0); debugPrintf("InitGameApplication ok\n"); } }
   CALL("Java_com_ea_EAThread_EAThread_Init", 0,0,0,0,0,0);
   CALL("Java_com_ea_EAIO_EAIO_StartupNativeImpl", am, sInternal, sExternal, sObb, 0,0);   // (assetManager, dataDir, externalDir, apkPath)
   CALL("Java_com_ea_EAMIO_StorageDirectory_StartupNativeImpl", 0,0,0,0,0,0);
