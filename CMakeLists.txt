@@ -19,5 +19,6 @@ target_link_libraries(ssx_vita
   SceAppMgr_stub SceAudio_stub SceCtrl_stub SceTouch_stub SceCommonDialog_stub SceDisplay_stub
   SceGxm_stub SceKernelDmacMgr_stub SceLibKernel_stub SceNet_stub SceNetCtl_stub SceShaccCg_stub
   SceSysmodule_stub ScePower_stub SceIofilemgr_stub)
+set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d ATTRIBUTE2=12")  # extended memory mode (+~109MB)
 vita_create_self(eboot.bin ssx_vita UNSAFE)
 vita_create_vpk(SSX.vpk ${VITA_TITLEID} eboot.bin VERSION ${VITA_VERSION} NAME ${VITA_APP_NAME})
