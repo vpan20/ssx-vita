@@ -135,7 +135,7 @@ static int GetMethodID(void *env, int clazz, const char *name, const char *sig) 
 static uintptr_t lookup(int id) { return (id >= 1 && id <= (int)NMETHODS) ? methods[id-1].func : 0; }
 
 // ---- Call*Method: args are passed via va_list; we forward up to 6 ints (covers every sig seen) ----
-#define FWD(f, obj, a) ((RET(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(obj,a[0],a[1],a[2],a[3],a[4],a[5])
+#define FWD(R, f, obj, a) ((R(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(obj,a[0],a[1],a[2],a[3],a[4],a[5])
 #define CALLV(NAME, RET, CAST) \
   static RET NAME##V(void *env, uintptr_t obj, int mid, va_list args) { \
     if (mid >= M_OPEN && mid <= M_GETASSETS) return (RET)special_call(mid, obj, args); \
@@ -143,11 +143,11 @@ static uintptr_t lookup(int id) { return (id >= 1 && id <= (int)NMETHODS) ? meth
     if (!f) { if (mid < UNKNOWN_BASE || mid - UNKNOWN_BASE >= unknown_count) return (RET)0; \
               static int warned[512]; if (!warned[mid-UNKNOWN_BASE]++) debugPrintf("JNI: call to unimplemented %s\n", unknown_names[mid-UNKNOWN_BASE]); return (RET)0; } \
     uintptr_t a[6]; for (int i = 0; i < 6; i++) a[i] = va_arg(args, uintptr_t); \
-    return FWD(f, obj, a); } \
+    return FWD(RET, f, obj, a); } \
   static RET NAME(void *env, uintptr_t obj, int mid, ...) { va_list ap; va_start(ap, mid); RET r = NAME##V(env, obj, mid, ap); va_end(ap); return r; } \
   static RET NAME##A(void *env, uintptr_t obj, int mid, uintptr_t *args) { \
     if (mid >= M_OPEN && mid <= M_GETASSETS) return (RET)special_callA(mid, obj, args); \
-    uintptr_t f = lookup(mid); if (!f) return (RET)0; return FWD(f, obj, args); }
+    uintptr_t f = lookup(mid); if (!f) return (RET)0; return FWD(RET, f, obj, args); }
 
 // special (asset) dispatch: reads the correctly-typed args
 static long long special_call(int mid, uintptr_t obj, va_list args) {
