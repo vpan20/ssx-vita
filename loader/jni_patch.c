@@ -132,6 +132,14 @@ static const struct { const char *n; int id; } special[] = {
   { "skip", M_SKIP }, { "close", M_CLOSE }, { "getLength", M_GETLENGTH }, { "getAssets", M_GETASSETS },
 };
 
+
+// ---- full Blast delegate surface (extracted from the binary's GetMethodId call sites) ----
+static float f_dpi(void)        { return 220.0f; }
+static float f_battery(void)    { return 1.0f; }
+static int  *empty_str_array(void) { static int a[1] = { 0 }; return a; }
+static int   gl_view(void)      { return 1; }
+static int   cur_height(void)   { return 544; }
+static int   notif_id(void)     { static int n = 1; return n++; }
 // ---- method tables (name → C impl). Names come from strings in libgame.so; extend as the
 // log reveals "JNI: unknown method <name>". Return type must match the Call<Type>Method used.
 static jni_method methods[] = {
@@ -179,6 +187,27 @@ static jni_method methods[] = {
   { "GetDeviceModel", (uintptr_t)dev_model }, { "GetDeviceUniqueId", (uintptr_t)dev_uid }, { "GetHardwareFloatingPointSupport", (uintptr_t)dev_fp },
   { "GetPlatformVersion", (uintptr_t)platform_ver }, { "GetProcessorArchitecture", (uintptr_t)proc_arch }, { "GetLocale", (uintptr_t)locale_str },
   { "GetTotalMemory", (uintptr_t)ret1 }, { "GetAvailableMemory", (uintptr_t)ret1 },
+  // Blast delegates: lifecycle / display / keyboard / notifications / misc — all no-op or sane defaults
+  { "ApplyKeepAwake", (uintptr_t)retv }, { "AttachView", (uintptr_t)retv }, { "BringToFront", (uintptr_t)retv },
+  { "Cancel", (uintptr_t)retv }, { "CancelAllLocalNotifications", (uintptr_t)ret1 }, { "CancelLocalNotification", (uintptr_t)ret1 },
+  { "DetachView", (uintptr_t)retv }, { "EnableAAR", (uintptr_t)retv }, { "Exit", (uintptr_t)retv },
+  { "GenerateUniqueNotificationId", (uintptr_t)notif_id }, { "GetBatteryLevel", (uintptr_t)f_battery },
+  { "GetCommandLineArguments", (uintptr_t)empty_str_array }, { "GetCurrentHeight", (uintptr_t)cur_height },
+  { "GetDefaultWidth", (uintptr_t)retv }, { "GetDisplayOrientationLock", (uintptr_t)ret0 },
+  { "GetDpiX", (uintptr_t)f_dpi }, { "GetDpiY", (uintptr_t)f_dpi }, { "GetGLView", (uintptr_t)gl_view },
+  { "GetPendingNFC", (uintptr_t)ret0 }, { "GetStdOrientation", (uintptr_t)ret0 }, { "Init", (uintptr_t)ret1 },
+  { "IntentView", (uintptr_t)ret0 }, { "IsAvailable", (uintptr_t)ret0 }, { "IsNavigationVisible", (uintptr_t)ret0 },
+  { "IsPowerConnected", (uintptr_t)ret1 }, { "IsVisible", (uintptr_t)ret1 },
+  { "NotifyPendingBackgroundLocalNotifications", (uintptr_t)ret0 }, { "NotifyPendingBackgroundPushNotifications", (uintptr_t)retv },
+  { "NotifyPendingStartupLocalNotifications", (uintptr_t)ret0 }, { "NotifyPendingStartupPushNotifications", (uintptr_t)retv },
+  { "OnLifeCycleFocusGained", (uintptr_t)retv }, { "OnPhysicalKeyboardVisibilityChanged", (uintptr_t)retv },
+  { "RegisterApplicationForNotifications", (uintptr_t)retv }, { "RegisterUserData", (uintptr_t)retv },
+  { "ScheduleLocalNotification", (uintptr_t)ret0 }, { "SetEnabled", (uintptr_t)retv }, { "SetEnterKeyLabel", (uintptr_t)retv },
+  { "SetLayout", (uintptr_t)retv }, { "SetMimeType", (uintptr_t)retv }, { "SetShiftEnabled", (uintptr_t)retv },
+  { "SetStdOrientation", (uintptr_t)retv }, { "SetUpdateFrequency", (uintptr_t)retv }, { "SetViewFrame", (uintptr_t)retv },
+  { "UnregisterApplicationForNotifications", (uintptr_t)retv }, { "UserSetVisible", (uintptr_t)retv },
+  { "VerifyUrlLaunch", (uintptr_t)retv }, { "Vibrate", (uintptr_t)retv }, { "IsPhysicalKeyboardVisible", (uintptr_t)ret0 },
+  { "IsTouchScreenMultiTouch", (uintptr_t)ret1 }, { "GetDeviceName", (uintptr_t)device_name },
   // com/ea/EAActivityArguments
   { "GetArgumentCount",     (uintptr_t)ret0 },
 };
