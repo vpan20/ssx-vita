@@ -26,4 +26,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SSX-vpk
-          path: build/SSX.vpk
+          path: |
+            build/SSX.vpk
+            build/ssx_vita
