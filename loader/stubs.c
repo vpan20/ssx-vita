@@ -25,7 +25,7 @@ int system(const char*c){return -1;}
 int waitpid(int p,int*s,int o){return -1;}
 int prctl(int o,...){return 0;}
 long syscall(long n,...){return -1;}
-void*mmap(void*a,size_t l,int p,int f,int fd,long off){void*m=memalign(0x1000,l);if(m)memset(m,0,l);return m?m:(void*)-1;}
+void*mmap(void*a,size_t l,int p,int f,int fd,long off){void*m=memalign(0x1000,l);if(m)memset(m,0,l);debugPrintf("mmap(%u) -> %p\n",(unsigned)l,m);return m?m:(void*)-1;}
 int munmap(void*a,size_t l){free(a);return 0;}
 int socket(int d,int t,int p){errno=EACCES;return -1;}
 int connect(int s,const void*a,unsigned l){return -1;}

@@ -14,8 +14,8 @@
 #define SCREEN_H 544
 #define LOAD_ADDR_GAME   0x94000000
 #define LOAD_ADDR_GNUSTL 0x9C000000   // libgame.so is ~40MB mapped; keep gnustl clear of it
-#define MEMORY_NEWLIB_MB 160
-#define MEMORY_VITAGL_MB 64          // tune: game streams textures from .big caches
+#define MEMORY_NEWLIB_MB 224
+#define MEMORY_VITAGL_MB 32          // tune: game streams textures from .big caches
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
 unsigned int sceLibcHeapSize = 8 * 1024 * 1024;

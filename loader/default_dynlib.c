@@ -89,6 +89,10 @@ extern void sem_post_bridge();
 extern void sem_timedwait_bridge();
 extern void sem_trywait_bridge();
 extern void sem_wait_bridge();
+// malloc/free with logging of large requests (game heaps are carved with malloc)
+void *malloc_log(size_t n) { void *p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
+void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
+void *memalign_log(size_t al, size_t n) { void *p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
 // libgcc / libstdc++ runtime symbols with no header
 extern void __aeabi_atexit();
 extern void __aeabi_d2lz();
@@ -171,7 +175,7 @@ so_default_dynlib default_dynlib[] = {
   { "bcopy", (uintptr_t)&bcopy },
   { "bind", (uintptr_t)&bind },
   { "bsearch", (uintptr_t)&bsearch },
-  { "calloc", (uintptr_t)&calloc },
+  { "calloc", (uintptr_t)&calloc_log },
   { "ceil", (uintptr_t)&ceil },
   { "ceilf", (uintptr_t)&ceilf },
   { "chdir", (uintptr_t)&chdir },
@@ -392,8 +396,8 @@ so_default_dynlib default_dynlib[] = {
   { "longjmp", (uintptr_t)&longjmp },
   { "lrand48", (uintptr_t)&lrand48 },
   { "lseek", (uintptr_t)&lseek },
-  { "malloc", (uintptr_t)&malloc },
-  { "memalign", (uintptr_t)&memalign },
+  { "malloc", (uintptr_t)&malloc_log },
+  { "memalign", (uintptr_t)&memalign_log },
   { "memchr", (uintptr_t)&memchr },
   { "memcmp", (uintptr_t)&memcmp },
   { "memcpy", (uintptr_t)&memcpy },
