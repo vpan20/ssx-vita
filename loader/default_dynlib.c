@@ -1,5 +1,4 @@
 // AUTO-GENERATED from libgame.so undefined imports (432). Edit stubs.c for overrides.
-#include <wctype.h> and #include <signal.h>
 #include <vitasdk.h>
 #include <vitaGL.h>
 #include <stdio.h>
@@ -23,6 +22,8 @@
 #include <malloc.h>
 #include <locale.h>
 #include <sched.h>
+#include <wctype.h>
+#include <signal.h>
 #include "so_util.h"
 #include "stubs.h"
 // GL functions absent from VitaGL — no-op/sane-default implementations
@@ -43,6 +44,51 @@ void glValidateProgram(GLuint p) {}
 void *__gnu_Unwind_Find_exidx(void *pc, int *count) { *count = 0; return NULL; }
 int writev(int fd, const void *iov, int cnt) { const struct { void *b; size_t l; } *v = iov; int n = 0; for (int i = 0; i < cnt; i++) n += write(fd, v[i].b, v[i].l); return n; }
 extern const char _ctype_[];
+// pthread/sem ABI bridge (pthread_bridge.c)
+extern void pthread_attr_destroy_bridge();
+extern void pthread_attr_getstack_bridge();
+extern void pthread_attr_init_bridge();
+extern void pthread_attr_setdetachstate_bridge();
+extern void pthread_attr_setschedparam_bridge();
+extern void pthread_attr_setschedpolicy_bridge();
+extern void pthread_attr_setstack_bridge();
+extern void pthread_attr_setstacksize_bridge();
+extern void pthread_cond_broadcast_bridge();
+extern void pthread_cond_destroy_bridge();
+extern void pthread_cond_init_bridge();
+extern void pthread_cond_signal_bridge();
+extern void pthread_cond_timedwait_bridge();
+extern void pthread_cond_wait_bridge();
+extern void pthread_create_bridge();
+extern void pthread_detach_bridge();
+extern void pthread_exit_bridge();
+extern void pthread_getattr_np_bridge();
+extern void pthread_getschedparam_bridge();
+extern void pthread_getspecific_bridge();
+extern void pthread_join_bridge();
+extern void pthread_key_create_bridge();
+extern void pthread_key_delete_bridge();
+extern void pthread_mutex_destroy_bridge();
+extern void pthread_mutex_init_bridge();
+extern void pthread_mutex_lock_bridge();
+extern void pthread_mutex_trylock_bridge();
+extern void pthread_mutex_unlock_bridge();
+extern void pthread_mutexattr_destroy_bridge();
+extern void pthread_mutexattr_init_bridge();
+extern void pthread_mutexattr_setpshared_bridge();
+extern void pthread_mutexattr_settype_bridge();
+extern void pthread_once_bridge();
+extern void pthread_self_bridge();
+extern void pthread_setschedparam_bridge();
+extern void pthread_setspecific_bridge();
+extern void sched_yield_bridge();
+extern void sem_destroy_bridge();
+extern void sem_getvalue_bridge();
+extern void sem_init_bridge();
+extern void sem_post_bridge();
+extern void sem_timedwait_bridge();
+extern void sem_trywait_bridge();
+extern void sem_wait_bridge();
 // libgcc / libstdc++ runtime symbols with no header
 extern void __aeabi_atexit();
 extern void __aeabi_d2lz();
@@ -365,42 +411,42 @@ so_default_dynlib default_dynlib[] = {
   { "pow", (uintptr_t)&pow },
   { "powf", (uintptr_t)&powf },
   { "prctl", (uintptr_t)&prctl },
-  { "pthread_attr_destroy", (uintptr_t)&pthread_attr_destroy },
-  { "pthread_attr_getstack", (uintptr_t)&pthread_attr_getstack },
-  { "pthread_attr_init", (uintptr_t)&pthread_attr_init },
-  { "pthread_attr_setdetachstate", (uintptr_t)&pthread_attr_setdetachstate },
-  { "pthread_attr_setschedparam", (uintptr_t)&pthread_attr_setschedparam },
-  { "pthread_attr_setschedpolicy", (uintptr_t)&pthread_attr_setschedpolicy },
-  { "pthread_attr_setstack", (uintptr_t)&pthread_attr_setstack },
-  { "pthread_attr_setstacksize", (uintptr_t)&pthread_attr_setstacksize },
-  { "pthread_cond_broadcast", (uintptr_t)&pthread_cond_broadcast },
-  { "pthread_cond_destroy", (uintptr_t)&pthread_cond_destroy },
-  { "pthread_cond_init", (uintptr_t)&pthread_cond_init },
-  { "pthread_cond_signal", (uintptr_t)&pthread_cond_signal },
-  { "pthread_cond_timedwait", (uintptr_t)&pthread_cond_timedwait },
-  { "pthread_cond_wait", (uintptr_t)&pthread_cond_wait },
-  { "pthread_create", (uintptr_t)&pthread_create },
-  { "pthread_detach", (uintptr_t)&pthread_detach },
-  { "pthread_exit", (uintptr_t)&pthread_exit },
-  { "pthread_getattr_np", (uintptr_t)&pthread_getattr_np },
-  { "pthread_getschedparam", (uintptr_t)&pthread_getschedparam },
-  { "pthread_getspecific", (uintptr_t)&pthread_getspecific },
-  { "pthread_join", (uintptr_t)&pthread_join },
-  { "pthread_key_create", (uintptr_t)&pthread_key_create },
-  { "pthread_key_delete", (uintptr_t)&pthread_key_delete },
-  { "pthread_mutex_destroy", (uintptr_t)&pthread_mutex_destroy },
-  { "pthread_mutex_init", (uintptr_t)&pthread_mutex_init },
-  { "pthread_mutex_lock", (uintptr_t)&pthread_mutex_lock },
-  { "pthread_mutex_trylock", (uintptr_t)&pthread_mutex_trylock },
-  { "pthread_mutex_unlock", (uintptr_t)&pthread_mutex_unlock },
-  { "pthread_mutexattr_destroy", (uintptr_t)&pthread_mutexattr_destroy },
-  { "pthread_mutexattr_init", (uintptr_t)&pthread_mutexattr_init },
-  { "pthread_mutexattr_setpshared", (uintptr_t)&pthread_mutexattr_setpshared },
-  { "pthread_mutexattr_settype", (uintptr_t)&pthread_mutexattr_settype },
-  { "pthread_once", (uintptr_t)&pthread_once },
-  { "pthread_self", (uintptr_t)&pthread_self },
-  { "pthread_setschedparam", (uintptr_t)&pthread_setschedparam },
-  { "pthread_setspecific", (uintptr_t)&pthread_setspecific },
+  { "pthread_attr_destroy", (uintptr_t)&pthread_attr_destroy_bridge },
+  { "pthread_attr_getstack", (uintptr_t)&pthread_attr_getstack_bridge },
+  { "pthread_attr_init", (uintptr_t)&pthread_attr_init_bridge },
+  { "pthread_attr_setdetachstate", (uintptr_t)&pthread_attr_setdetachstate_bridge },
+  { "pthread_attr_setschedparam", (uintptr_t)&pthread_attr_setschedparam_bridge },
+  { "pthread_attr_setschedpolicy", (uintptr_t)&pthread_attr_setschedpolicy_bridge },
+  { "pthread_attr_setstack", (uintptr_t)&pthread_attr_setstack_bridge },
+  { "pthread_attr_setstacksize", (uintptr_t)&pthread_attr_setstacksize_bridge },
+  { "pthread_cond_broadcast", (uintptr_t)&pthread_cond_broadcast_bridge },
+  { "pthread_cond_destroy", (uintptr_t)&pthread_cond_destroy_bridge },
+  { "pthread_cond_init", (uintptr_t)&pthread_cond_init_bridge },
+  { "pthread_cond_signal", (uintptr_t)&pthread_cond_signal_bridge },
+  { "pthread_cond_timedwait", (uintptr_t)&pthread_cond_timedwait_bridge },
+  { "pthread_cond_wait", (uintptr_t)&pthread_cond_wait_bridge },
+  { "pthread_create", (uintptr_t)&pthread_create_bridge },
+  { "pthread_detach", (uintptr_t)&pthread_detach_bridge },
+  { "pthread_exit", (uintptr_t)&pthread_exit_bridge },
+  { "pthread_getattr_np", (uintptr_t)&pthread_getattr_np_bridge },
+  { "pthread_getschedparam", (uintptr_t)&pthread_getschedparam_bridge },
+  { "pthread_getspecific", (uintptr_t)&pthread_getspecific_bridge },
+  { "pthread_join", (uintptr_t)&pthread_join_bridge },
+  { "pthread_key_create", (uintptr_t)&pthread_key_create_bridge },
+  { "pthread_key_delete", (uintptr_t)&pthread_key_delete_bridge },
+  { "pthread_mutex_destroy", (uintptr_t)&pthread_mutex_destroy_bridge },
+  { "pthread_mutex_init", (uintptr_t)&pthread_mutex_init_bridge },
+  { "pthread_mutex_lock", (uintptr_t)&pthread_mutex_lock_bridge },
+  { "pthread_mutex_trylock", (uintptr_t)&pthread_mutex_trylock_bridge },
+  { "pthread_mutex_unlock", (uintptr_t)&pthread_mutex_unlock_bridge },
+  { "pthread_mutexattr_destroy", (uintptr_t)&pthread_mutexattr_destroy_bridge },
+  { "pthread_mutexattr_init", (uintptr_t)&pthread_mutexattr_init_bridge },
+  { "pthread_mutexattr_setpshared", (uintptr_t)&pthread_mutexattr_setpshared_bridge },
+  { "pthread_mutexattr_settype", (uintptr_t)&pthread_mutexattr_settype_bridge },
+  { "pthread_once", (uintptr_t)&pthread_once_bridge },
+  { "pthread_self", (uintptr_t)&pthread_self_bridge },
+  { "pthread_setschedparam", (uintptr_t)&pthread_setschedparam_bridge },
+  { "pthread_setspecific", (uintptr_t)&pthread_setspecific_bridge },
   { "putchar", (uintptr_t)&putchar },
   { "qsort", (uintptr_t)&qsort },
   { "read", (uintptr_t)&read },
@@ -414,14 +460,14 @@ so_default_dynlib default_dynlib[] = {
   { "rename", (uintptr_t)&rename },
   { "rewind", (uintptr_t)&rewind },
   { "rmdir", (uintptr_t)&rmdir },
-  { "sched_yield", (uintptr_t)&sched_yield },
-  { "sem_destroy", (uintptr_t)&sem_destroy },
-  { "sem_getvalue", (uintptr_t)&sem_getvalue },
-  { "sem_init", (uintptr_t)&sem_init },
-  { "sem_post", (uintptr_t)&sem_post },
-  { "sem_timedwait", (uintptr_t)&sem_timedwait },
-  { "sem_trywait", (uintptr_t)&sem_trywait },
-  { "sem_wait", (uintptr_t)&sem_wait },
+  { "sched_yield", (uintptr_t)&sched_yield_bridge },
+  { "sem_destroy", (uintptr_t)&sem_destroy_bridge },
+  { "sem_getvalue", (uintptr_t)&sem_getvalue_bridge },
+  { "sem_init", (uintptr_t)&sem_init_bridge },
+  { "sem_post", (uintptr_t)&sem_post_bridge },
+  { "sem_timedwait", (uintptr_t)&sem_timedwait_bridge },
+  { "sem_trywait", (uintptr_t)&sem_trywait_bridge },
+  { "sem_wait", (uintptr_t)&sem_wait_bridge },
   { "send", (uintptr_t)&send },
   { "sendto", (uintptr_t)&sendto },
   { "setenv", (uintptr_t)&setenv },
@@ -491,21 +537,33 @@ so_default_dynlib default_dynlib[] = {
   { "wcscmp", (uintptr_t)&wcscmp },
   { "wcscoll", (uintptr_t)&wcscoll },
   { "wcscpy", (uintptr_t)&wcscpy },
-  { "write", (uintptr_t)&write },  
-  {"_ctype_", (uintptr_t)&_ctype_ },
+  { "write", (uintptr_t)&write },
+  { "_ctype_", (uintptr_t)&_ctype_ },
   { "__gnu_Unwind_Find_exidx", (uintptr_t)&__gnu_Unwind_Find_exidx },
-  { "wmemchr", (uintptr_t)&wmemchr }, { "wmemcpy", (uintptr_t)&wmemcpy },
-  { "wcrtomb", (uintptr_t)&wcrtomb }, { "mbrtowc", (uintptr_t)&mbrtowc },
-  { "strxfrm", (uintptr_t)&strxfrm }, { "wcsxfrm", (uintptr_t)&wcsxfrm },
-  { "wctype", (uintptr_t)&wctype }, { "towupper", (uintptr_t)&towupper },
-  { "towlower", (uintptr_t)&towlower }, { "iswctype", (uintptr_t)&iswctype },
-  { "wctob", (uintptr_t)&wctob }, { "btowc", (uintptr_t)&btowc },
-  { "wcsftime", (uintptr_t)&wcsftime }, { "fdopen", (uintptr_t)&fdopen },
-  { "writev", (uintptr_t)&writev }, { "putwc", (uintptr_t)&putwc },
-  { "ungetwc", (uintptr_t)&ungetwc }, { "getwc", (uintptr_t)&getwc },
-  { "getc", (uintptr_t)&getc }, { "putc", (uintptr_t)&putc },
-  { "wcslen", (uintptr_t)&wcslen }, { "wmemset", (uintptr_t)&wmemset },
-  { "wmemmove", (uintptr_t)&wmemmove }, { "wmemcmp", (uintptr_t)&wmemcmp },
+  { "wmemchr", (uintptr_t)&wmemchr },
+  { "wmemcpy", (uintptr_t)&wmemcpy },
+  { "wcrtomb", (uintptr_t)&wcrtomb },
+  { "mbrtowc", (uintptr_t)&mbrtowc },
+  { "strxfrm", (uintptr_t)&strxfrm },
+  { "wcsxfrm", (uintptr_t)&wcsxfrm },
+  { "wctype", (uintptr_t)&wctype },
+  { "towupper", (uintptr_t)&towupper },
+  { "towlower", (uintptr_t)&towlower },
+  { "iswctype", (uintptr_t)&iswctype },
+  { "wctob", (uintptr_t)&wctob },
+  { "btowc", (uintptr_t)&btowc },
+  { "wcsftime", (uintptr_t)&wcsftime },
+  { "fdopen", (uintptr_t)&fdopen },
+  { "writev", (uintptr_t)&writev },
+  { "putwc", (uintptr_t)&putwc },
+  { "ungetwc", (uintptr_t)&ungetwc },
+  { "getwc", (uintptr_t)&getwc },
+  { "getc", (uintptr_t)&getc },
+  { "putc", (uintptr_t)&putc },
+  { "wcslen", (uintptr_t)&wcslen },
+  { "wmemset", (uintptr_t)&wmemset },
+  { "wmemmove", (uintptr_t)&wmemmove },
+  { "wmemcmp", (uintptr_t)&wmemcmp },
   { "raise", (uintptr_t)&raise },
 };
 int default_dynlib_size = sizeof(default_dynlib);

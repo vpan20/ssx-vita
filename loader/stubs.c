@@ -46,15 +46,6 @@ void*gethostbyname(const char*n){return NULL;}
 int gethostname(char*n,size_t l){strncpy(n,"vita",l);return 0;}
 unsigned inet_addr(const char*c){return 0xffffffff;}
 char*inet_ntoa(unsigned a){return (char*)"0.0.0.0";}
-int pthread_attr_setschedpolicy(pthread_attr_t*a,int p){return 0;}
-int pthread_attr_setschedparam(pthread_attr_t*a,const struct sched_param*p){return 0;}
-int pthread_setschedparam(pthread_t t,int p,const struct sched_param*s){return 0;}
-int pthread_getschedparam(pthread_t t,int*p,struct sched_param*s){if(p)*p=0;return 0;}
-int pthread_getattr_np(pthread_t t,pthread_attr_t*a){return -1;}
-int pthread_attr_getstack(const pthread_attr_t*a,void**s,size_t*z){*s=NULL;*z=1024*1024;return 0;}
-int pthread_attr_setstack(pthread_attr_t*a,void*s,size_t z){return 0;}
-int pthread_mutexattr_setpshared(pthread_mutexattr_t*a,int p){return 0;}
-int sem_getvalue(sem_t*s,int*v){*v=0;return 0;}
 int _Unwind_Backtrace(void*f,void*a){return 0;}
 int _Unwind_VRS_Get(void*c,int r,unsigned i,int t,void*o){return 0;}
 void __aeabi_unwind_cpp_pr0(void){}
@@ -90,7 +81,6 @@ char*getenv(const char*n){return NULL;}
 int setenv(const char*n,const char*v,int o){return 0;}
 int unsetenv(const char*n){return 0;}
 clock_t clock(void){return sceKernelGetProcessTimeWide();}
-int sched_yield(void){sceKernelDelayThread(0);return 0;}
 char*getcwd(char*b,size_t l){strncpy(b,DATA_PATH,l);return b;}
 int chdir(const char*p){return 0;}
 int ftruncate(int f,long l){return 0;}

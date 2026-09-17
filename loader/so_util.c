@@ -13,9 +13,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-   #include "stubs.h"
-   #define fatal_error(...) do { debugPrintf(__VA_ARGS__); abort(); } while (0)
-   #define debugPrintf_unused(...)
+#include "stubs.h"
+#define fatal_error(...) do { debugPrintf(__VA_ARGS__); abort(); } while (0)
+#define debugPrintf_unused(...)
 #include "so_util.h"
 
 #ifndef SCE_KERNEL_MEMBLOCK_TYPE_USER_RX
@@ -333,7 +333,7 @@ int so_resolve(so_module *mod, so_default_dynlib *default_dynlib, int size_defau
           }
 
           if (!resolved) {
-           debugPrintf("Missing: %s\n", mod->dynstr + sym->st_name);
+            debugPrintf("Missing: %s\n", mod->dynstr + sym->st_name);
           }
         }
 
