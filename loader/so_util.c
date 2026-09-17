@@ -83,13 +83,15 @@ int so_load(so_module *mod, const char *filename, uintptr_t load_addr) {
     return so_blockid;
 
 
-  sceIoRead(fd, so_data, so_size);
+  { size_t got = 0; while (got < so_size) { int r = sceIoRead(fd, (char *)so_data + got, so_size - got); if (r <= 0) { debugPrintf("  read error 0x%08X at %u\n", r, (unsigned)got); break; } got += r; }
+    debugPrintf("  read %u/%u bytes\n", (unsigned)got, (unsigned)so_size); }
   sceIoClose(fd);
 
   if (memcmp(so_data, ELFMAG, SELFMAG) != 0) {
-    res = -1;
+    debugPrintf("  not an ELF\n"); res = -1;
     goto err_free_so;
   }
+  debugPrintf("  ELF ok, phnum=%d shnum=%d\n", 0, 0);
 
   mod->ehdr = (Elf32_Ehdr *)so_data;
   mod->phdr = (Elf32_Phdr *)((uintptr_t)so_data + mod->ehdr->e_phoff);

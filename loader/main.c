@@ -19,7 +19,7 @@
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
 unsigned int sceLibcHeapSize = 8 * 1024 * 1024;
-unsigned int sceUserMainThreadStackSize = 2 * 1024 * 1024;
+unsigned int sceUserMainThreadStackSize = 1 * 1024 * 1024;
 extern so_default_dynlib default_dynlib[]; extern int default_dynlib_size;
 
 static so_module game_mod, gnustl_mod;

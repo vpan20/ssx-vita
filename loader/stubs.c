@@ -13,10 +13,9 @@
 #include <unistd.h>
 #include "stubs.h"
 
-static SceUID log_fd = -1;
 void debugPrintf(const char*fmt,...){va_list a;va_start(a,fmt);char b[1024];int n=vsnprintf(b,sizeof b,fmt,a);va_end(a);if(n<=0)return;
-  if(log_fd<0)log_fd=sceIoOpen(DATA_PATH"/ssx.log",SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND,0777);
-  if(log_fd>=0){sceIoWrite(log_fd,b,n);sceIoSyncByFd(log_fd,0);}
+  SceUID fd=sceIoOpen(DATA_PATH"/ssx.log",SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND,0777);
+  if(fd>=0){sceIoWrite(fd,b,n);sceIoClose(fd);}
   sceClibPrintf("%s",b);}
 void log_vprintf(const char*tag,const char*fmt,va_list a){if(!fmt)return;char b[1024];vsnprintf(b,sizeof b,fmt,a);debugPrintf("[%s] %s\n",tag,b);}
 
