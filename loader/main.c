@@ -111,8 +111,10 @@ int main(int argc, char *argv[]) {
   // 5. Frame loop. Android calls NativeOnDrawFrame from GLSurfaceView; we do the same and swap ourselves.
   sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
   sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG_WIDE);
-  int touching = 0;
+  int touching = 0; unsigned frame = 0;
   for (;;) {
+    if (frame < 5 || frame % 300 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB)\n", frame, fi.size_user / 1024, fi.size_cdram / 1024); }
+    frame++;
     SceTouchData td; sceTouchPeek(SCE_TOUCH_PORT_FRONT, &td, 1);
     if (Touch) {
       if (td.reportNum > 0) { float x = td.report[0].x / 1920.0f * SCREEN_W, y = td.report[0].y / 1088.0f * SCREEN_H;
@@ -122,7 +124,9 @@ int main(int argc, char *argv[]) {
     // TODO(step 4): map SceCtrl buttons → Blast key codes (Android KEYCODE_DPAD_*, BUTTON_A…) via Key/KeyUp once the
     // game's gamepad path is confirmed; the console-origin code very likely has a full pad path behind it.
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
+    if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }
     vglSwapBuffers(GL_FALSE);
+    if (frame <= 5) debugPrintf("  frame %u swapped\n", frame - 1);
   }
   return 0;
 }
