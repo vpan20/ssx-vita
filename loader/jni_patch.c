@@ -87,7 +87,14 @@ static char *rewrite_memcfg(char *buf, long *size) {
 static AssetStream *asset_open(const char *name) {
   char p[512]; asset_path(p, sizeof p, name);
   SceUID fd = sceIoOpen(p, SCE_O_RDONLY, 0);
-  if (fd < 0) { debugPrintf("asset open FAIL %s\n", p); return NULL; }
+  if (fd < 0) {
+    size_t pl = strlen(p);
+    if (pl > 4 && !strcmp(p + pl - 4, ".fxo")) {   // shader not shipped in this build: substitute the engine's placeholder
+      fd = sceIoOpen(DATA_PATH "/obb/mobile/shaders/errormissing.fxo", SCE_O_RDONLY, 0);
+      debugPrintf("asset open %s missing -> errormissing.fxo (%s)\n", name, fd < 0 ? "FAIL" : "ok");
+    }
+    if (fd < 0) { debugPrintf("asset open FAIL %s\n", p); return NULL; }
+  }
   AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
   s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
   debugPrintf("asset open %s (%ld bytes)\n", name, s->size);
@@ -139,6 +146,7 @@ static float f_battery(void)    { return 1.0f; }
 static int  *empty_str_array(void) { static int a[1] = { 0 }; return a; }
 static int   gl_view(void)      { return 1; }
 static int   cur_height(void)   { return 544; }
+static int   cur_width(void)    { return 960; }
 static int   notif_id(void)     { static int n = 1; return n++; }
 // ---- method tables (name → C impl). Names come from strings in libgame.so; extend as the
 // log reveals "JNI: unknown method <name>". Return type must match the Call<Type>Method used.
@@ -208,6 +216,14 @@ static jni_method methods[] = {
   { "UnregisterApplicationForNotifications", (uintptr_t)retv }, { "UserSetVisible", (uintptr_t)retv },
   { "VerifyUrlLaunch", (uintptr_t)retv }, { "Vibrate", (uintptr_t)retv }, { "IsPhysicalKeyboardVisible", (uintptr_t)ret0 },
   { "IsTouchScreenMultiTouch", (uintptr_t)ret1 }, { "GetDeviceName", (uintptr_t)device_name },
+  { "GetDefaultHeight", (uintptr_t)cur_height }, { "GetCurrentWidth", (uintptr_t)cur_width }, { "GetDefaultWidthI", (uintptr_t)cur_width },
+  // EglAndroidDelegate object getters — opaque handles, VitaGL owns the real context
+  { "GetEgl", (uintptr_t)ret1 }, { "GetEglNoContext", (uintptr_t)ret0 }, { "GetEglNoDisplay", (uintptr_t)ret0 },
+  { "GetEglNoSurface", (uintptr_t)ret0 }, { "GetSurface", (uintptr_t)ret1 },
+  // Trust5 store (Java side) — offline: nothing purchased, no pending purchases
+  { "authenticatePurchases", (uintptr_t)retv }, { "checkWaitingPurchases", (uintptr_t)retv }, { "erasePurchaseState", (uintptr_t)retv },
+  { "getPendingId", (uintptr_t)ret0 }, { "requestStoreItems", (uintptr_t)retv }, { "purchaseStoreItem", (uintptr_t)retv },
+  { "requestPurchasedItems", (uintptr_t)retv }, { "isItemAlreadyPurchased", (uintptr_t)ret0 }, { "initialize", (uintptr_t)retv },
   // com/ea/EAActivityArguments
   { "GetArgumentCount",     (uintptr_t)ret0 },
 };
