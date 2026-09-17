@@ -89,6 +89,8 @@ extern void sem_post_bridge();
 extern void sem_timedwait_bridge();
 extern void sem_trywait_bridge();
 extern void sem_wait_bridge();
+FILE *fopen_log(const char *p, const char *m) { FILE *f = fopen(p, m); debugPrintf("fopen(%s,%s) -> %p\n", p, m, f); return f; }
+int open_log(const char *p, int f, ...) { int fd = open(p, f, 0777); debugPrintf("open(%s) -> %d\n", p, fd); return fd; }
 // malloc/free with logging of large requests (game heaps are carved with malloc)
 void *malloc_log(size_t n) { void *p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
 void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
@@ -204,7 +206,7 @@ so_default_dynlib default_dynlib[] = {
   { "floorf", (uintptr_t)&floorf },
   { "fmod", (uintptr_t)&fmod },
   { "fmodf", (uintptr_t)&fmodf },
-  { "fopen", (uintptr_t)&fopen },
+  { "fopen", (uintptr_t)&fopen_log },
   { "fork", (uintptr_t)&fork },
   { "fprintf", (uintptr_t)&fprintf },
   { "fputc", (uintptr_t)&fputc },
@@ -409,7 +411,7 @@ so_default_dynlib default_dynlib[] = {
   { "modf", (uintptr_t)&modf },
   { "munmap", (uintptr_t)&munmap },
   { "nanosleep", (uintptr_t)&nanosleep },
-  { "open", (uintptr_t)&open },
+  { "open", (uintptr_t)&open_log },
   { "opendir", (uintptr_t)&opendir },
   { "poll", (uintptr_t)&poll },
   { "pow", (uintptr_t)&pow },

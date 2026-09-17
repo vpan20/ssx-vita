@@ -47,6 +47,7 @@ static AssetStream *asset_open(const char *name) {
   if (fd < 0) { debugPrintf("asset open FAIL %s\n", p); return NULL; }
   AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
   s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
+  debugPrintf("asset open %s (%ld bytes)\n", name, s->size);
   return s;
 }
 static int asset_read(AssetStream *s, int *jarr, int off, int len) {
