@@ -120,6 +120,10 @@ static long long asset_skip(AssetStream *s, long long n) {
   long np = s->pos + (long)n; if (np > s->size) np = s->size;
   if (!s->mem) sceIoLseek(s->fd, np, SCE_SEEK_SET); long long d = np - s->pos; s->pos = np; return d;
 }
+static void asset_reset(AssetStream *s) {
+  if (!s || s->tag != TAG_STREAM) return;
+  if (!s->mem) sceIoLseek(s->fd, 0, SCE_SEEK_SET); s->pos = 0;
+}
 static void asset_close(AssetStream *s) {
   if (!s || s->tag != TAG_STREAM) return;
   if (s->mem) free(s->mem); else sceIoClose(s->fd);
@@ -133,10 +137,11 @@ static int *asset_list(const char *name) {
   int *arr = calloc(n + 1, sizeof(int)); arr[0] = n; for (int i = 0; i < n; i++) arr[1 + i] = (int)names[i];
   return arr;
 }
-enum { M_OPEN = 900, M_OPENFD, M_LIST, M_READ, M_SKIP, M_CLOSE, M_GETLENGTH, M_GETASSETS };
+enum { M_OPEN = 900, M_OPENFD, M_LIST, M_READ, M_SKIP, M_CLOSE, M_GETLENGTH, M_AVAILABLE, M_RESET, M_MARK, M_GETASSETS };
 static const struct { const char *n; int id; } special[] = {
   { "open", M_OPEN }, { "openFd", M_OPENFD }, { "list", M_LIST }, { "read", M_READ },
-  { "skip", M_SKIP }, { "close", M_CLOSE }, { "getLength", M_GETLENGTH }, { "getAssets", M_GETASSETS },
+  { "skip", M_SKIP }, { "close", M_CLOSE }, { "getLength", M_GETLENGTH }, { "available", M_AVAILABLE },
+  { "reset", M_RESET }, { "mark", M_MARK }, { "getAssets", M_GETASSETS },
 };
 
 
@@ -275,6 +280,9 @@ static long long special_call(int mid, uintptr_t obj, va_list args) {
     case M_SKIP:  { long long n = va_arg(args, long long); return asset_skip((AssetStream *)obj, n); }
     case M_CLOSE: asset_close((AssetStream *)obj); return 0;
     case M_GETLENGTH: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size : 0; }
+    case M_AVAILABLE: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size - s->pos : 0; }
+    case M_RESET: asset_reset((AssetStream *)obj); return 0;
+    case M_MARK: return 0;
   }
   return 0;
 }
@@ -287,6 +295,9 @@ static long long special_callA(int mid, uintptr_t obj, uintptr_t *a) {
     case M_SKIP:  { long long n; memcpy(&n, a, 8); return asset_skip((AssetStream *)obj, n); }
     case M_CLOSE: asset_close((AssetStream *)obj); return 0;
     case M_GETLENGTH: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size : 0; }
+    case M_AVAILABLE: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size - s->pos : 0; }
+    case M_RESET: asset_reset((AssetStream *)obj); return 0;
+    case M_MARK: return 0;
   }
   return 0;
 }
