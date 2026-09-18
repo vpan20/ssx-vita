@@ -1,0 +1,27 @@
+name: Decode coredump
+on: [workflow_dispatch]
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    env:
+      VITASDK: /home/runner/vitasdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install VitaSDK (for objdump/addr2line)
+        run: |
+          git clone --depth 1 https://github.com/vitasdk/vdpm
+          cd vdpm && ./bootstrap-vitasdk.sh
+          echo "$VITASDK/bin" >> "$GITHUB_PATH"
+      - name: Get vita-parse-core
+        run: |
+          git clone --depth 1 https://github.com/xyzz/vita-parse-core
+          pip install -r vita-parse-core/requirements.txt
+      - name: Decode
+        run: |
+          ELF=$(ls crash/ssx_vita)
+          DUMP=$(ls crash/*.psp2dmp | head -n1)
+          cd vita-parse-core && python main.py "../$DUMP" "../$ELF" | tee ../crash_report.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: crash-report, path: crash_report.txt }
