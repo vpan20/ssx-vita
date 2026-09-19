@@ -106,13 +106,12 @@ static int asset_read(AssetStream *s, int *jarr, int off, int len) {
   int n;
   if (s->mem) { n = len; if (n > s->size - s->pos) n = s->size - s->pos; memcpy((char *)(jarr + 1) + off, s->mem + s->pos, n); }
   else n = sceIoRead(s->fd, (char *)(jarr + 1) + off, len);
-  if (s->calls++ < 4) debugPrintf("  read(arr=%p len=%d off=%d arrlen=%d) -> %d pos=%ld/%ld\n", jarr, len, off, jarr ? jarr[0] : -1, n, s->pos + (n > 0 ? n : 0), s->size);
+  s->calls++;
   if (n > 0) s->pos += n;
   return n > 0 ? n : -1;
 }
 static long long asset_skip(AssetStream *s, long long n) {
   if (!s || s->tag != TAG_STREAM) return 0;
-  debugPrintf("  skip(%lld) pos=%ld\n", n, s->pos);
   long np = s->pos + (long)n; if (np > s->size) np = s->size;
   if (!s->mem) sceIoLseek(s->fd, np, SCE_SEEK_SET); long long d = np - s->pos; s->pos = np; return d;
 }
@@ -122,7 +121,6 @@ static void asset_reset(AssetStream *s) {
 }
 static void asset_close(AssetStream *s) {
   if (!s || s->tag != TAG_STREAM) return;
-  debugPrintf("  close() after %d reads pos=%ld/%ld\n", s->calls, s->pos, s->size);
   if (s->mem) free(s->mem); else sceIoClose(s->fd);
   s->tag = 0; free(s);
 }
@@ -278,9 +276,9 @@ static long long special_call(int mid, uintptr_t obj, va_list args) {
     case M_SKIP:  { long long n = va_arg(args, long long); return asset_skip((AssetStream *)obj, n); }
     case M_CLOSE: asset_close((AssetStream *)obj); return 0;
     case M_GETLENGTH: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size : 0; }
-    case M_AVAILABLE: { AssetStream *s = (AssetStream *)obj; debugPrintf("  available() -> %ld\n", (s && s->tag == TAG_STREAM) ? s->size - s->pos : 0); return (s && s->tag == TAG_STREAM) ? s->size - s->pos : 0; }
-    case M_RESET: debugPrintf("  reset()\n"); asset_reset((AssetStream *)obj); return 0;
-    case M_MARK: debugPrintf("  mark()\n"); return 0;
+    case M_AVAILABLE: { AssetStream *s = (AssetStream *)obj; return (s && s->tag == TAG_STREAM) ? s->size - s->pos : 0; }
+    case M_RESET: asset_reset((AssetStream *)obj); return 0;
+    case M_MARK: return 0;
   }
   return 0;
 }

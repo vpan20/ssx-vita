@@ -116,7 +116,9 @@ int pthread_create_bridge(pthread_t *t, bionic_attr *a, void *(*fn)(void *), voi
 int pthread_join_bridge(pthread_t t, void **ret) { return pthread_join(t, ret); }
 int pthread_detach_bridge(pthread_t t) { return pthread_detach(t); }
 void pthread_exit_bridge(void *ret) { pthread_exit(ret); }
-pthread_t pthread_self_bridge(void) { return pthread_self(); }
+// vitasdk's pthread_self() returns 0 on the main thread (not created via pthread_create). Game locks use 0 as
+// "unowned", so the main thread would appear to own every lock. Report a fixed non-zero id instead.
+pthread_t pthread_self_bridge(void) { pthread_t t = pthread_self(); return t ? t : (pthread_t)0x4D41494E; }
 
 // ---------- once (Bionic int slot: 0 = not run) ----------
 int pthread_once_bridge(int *slot, void (*fn)(void)) {
