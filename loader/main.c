@@ -69,6 +69,8 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
     uint32_t *w = asset;
     debugPrintf("TranslateStream: dead asset %p: %08X %08X %08X %08X | %08X %08X %08X %08X\n", asset,
       w ? w[0] : 0, w ? w[1] : 0, w ? w[2] : 0, w ? w[3] : 0, w ? w[4] : 0, w ? w[5] : 0, w ? w[6] : 0, w ? w[7] : 0);
+    // mirror the game's own failure path: stream->vtable[2](stream) (release the chunk stream), then state 3
+    if (stream && *(uint32_t **)stream) { void (*rel)(void *) = (void (*)(void *))(*(uint32_t **)stream)[2]; if (rel) rel(stream); }
     return 3;
   }
   return orig_TranslateStream(parent, asset, stream, flag);
