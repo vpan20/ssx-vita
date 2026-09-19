@@ -104,11 +104,23 @@ int pthread_getschedparam_bridge(pthread_t t, int *policy, void *param) { if (po
 int pthread_setschedparam_bridge(pthread_t t, int policy, const void *param) { return 0; }
 
 // ---------- threads ----------
+// Worker threads run one notch above the main thread (as EAThread's priorities do on Android) and on any core;
+// otherwise the Vita scheduler lets the main thread starve loader/translator threads and asset lifetimes race.
+static int main_prio = 0;
+typedef struct { void *(*fn)(void *); void *arg; } thread_boot;
+static void *thread_boot_fn(void *p) {
+  thread_boot b = *(thread_boot *)p; free(p);
+  if (main_prio) sceKernelChangeThreadPriority(0, main_prio - 1);
+  sceKernelChangeThreadCpuAffinityMask(0, 0x70000);   // any of the 3 user cores
+  return b.fn(b.arg);
+}
 int pthread_create_bridge(pthread_t *t, bionic_attr *a, void *(*fn)(void *), void *arg) {
+  if (!main_prio) { SceKernelThreadInfo ti = { .size = sizeof ti }; if (sceKernelGetThreadInfo(sceKernelGetThreadId(), &ti) >= 0) main_prio = ti.currentPriority; }
   pthread_attr_t *ra = attr_get(a);
   pthread_attr_t tmp;
   if (!ra) { pthread_attr_init(&tmp); pthread_attr_setstacksize(&tmp, DEFAULT_STACK); ra = &tmp; }
-  int r = pthread_create(t, ra, fn, arg);
+  thread_boot *b = malloc(sizeof *b); b->fn = fn; b->arg = arg;
+  int r = pthread_create(t, ra, thread_boot_fn, b);
   if (ra == &tmp) pthread_attr_destroy(&tmp);
   if (r) debugPrintf("pthread_create failed: %d\n", r);
   return r;
