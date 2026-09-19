@@ -7,11 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "so_util.h"
+#ifndef SCE_KERNEL_MEMBLOCK_TYPE_USER_RX
+#define SCE_KERNEL_MEMBLOCK_TYPE_USER_RX (0x0C20D050)   // not in this VitaSDK's headers; same value so_util.c uses
+#endif
 #include "jni_patch.h"
 #include "stubs.h"
-#ifndef SCE_KERNEL_MEMBLOCK_TYPE_USER_RX
-#define SCE_KERNEL_MEMBLOCK_TYPE_USER_RX (0x0C20D050)
-#endif
 
 #define SCREEN_W 960
 #define SCREEN_H 544
@@ -50,18 +50,16 @@ static void fatal(const char *msg) {
 // Trampoline = first two original instructions (must be position-independent) + jump back to orig+8.
 static uint8_t *tramp_pool; static int tramp_used;
 static void *make_trampoline(uintptr_t target) {
-  if (!tramp_pool) {
-    SceUID b = kuKernelAllocMemBlock("tramp", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, 0x1000, NULL);
-    if (b < 0) { debugPrintf("trampoline pool alloc failed 0x%08X\n", b); return NULL; }
-    sceKernelGetMemBlockBase(b, (void **)&tramp_pool);
-  }
+  // Use the page-rounding slack at the end of the game's own RX block (memsz 0x166C634, block 0x166D000): ~2.4KB free.
+  if (!tramp_pool) tramp_pool = (uint8_t *)(game_mod.text_base + 0x166C640);
+  if (tramp_used + 16 > 0x9C0) { debugPrintf("trampoline pool full\n"); return NULL; }
   uint32_t t[4] = { *(uint32_t *)target, *(uint32_t *)(target + 4), 0xe51ff004, (uint32_t)(target + 8) };
   uint8_t *at = tramp_pool + tramp_used; tramp_used += 16;
   kuKernelCpuUnrestrictedMemcpy(at, t, sizeof t);
   kuKernelFlushCaches(at, 16);
   return at;
 }
-#define HOOK(off, fn, orig_var) do { uintptr_t a = game_mod.text_base + (off); orig_var = make_trampoline(a); hook_addr(a, (uintptr_t)fn); debugPrintf("hook " #fn " @%p tramp=%p\n", (void *)a, orig_var); } while (0)
+#define HOOK(off, fn, orig_var) do { uintptr_t a = game_mod.text_base + (off); orig_var = make_trampoline(a); if (orig_var) hook_addr(a, (uintptr_t)fn); debugPrintf("hook " #fn " @%p tramp=%p\n", (void *)a, orig_var); } while (0)
 
 // AssetStream::Loader::TranslateStream(parent, asset, stream, flag) — an asset released while still queued reaches
 // here with a dead (zero) type pointer and crashes the translator thread. Report it failed (3) instead.
