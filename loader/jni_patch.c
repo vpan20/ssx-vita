@@ -46,6 +46,7 @@ static int audio_write(uintptr_t obj, int *arr, int off, int len) { return len; 
 typedef struct { int tag; } AssetMgr;
 typedef struct { int tag; SceUID fd; long size; long pos; char *mem; int calls; } AssetStream;
 static AssetMgr fake_asset_mgr = { TAG_ASSET_MGR };
+static int pending_exception;   // set when a Java call "throws" (e.g. FileNotFoundException on AssetManager.open)
 void *fake_asset_manager = &fake_asset_mgr;
 
 static void asset_path(char *out, size_t n, const char *name) {
@@ -87,14 +88,7 @@ static char *rewrite_memcfg(char *buf, long *size) {
 static AssetStream *asset_open(const char *name) {
   char p[512]; asset_path(p, sizeof p, name);
   SceUID fd = sceIoOpen(p, SCE_O_RDONLY, 0);
-  if (fd < 0) {
-    size_t pl = strlen(p);
-    if (pl > 4 && !strcmp(p + pl - 4, ".fxo")) {   // shader not shipped in this build: substitute the engine's placeholder
-      fd = sceIoOpen(DATA_PATH "/obb/mobile/shaders/errormissing.fxo", SCE_O_RDONLY, 0);
-      debugPrintf("asset open %s missing -> errormissing.fxo (%s)\n", name, fd < 0 ? "FAIL" : "ok");
-    }
-    if (fd < 0) { debugPrintf("asset open FAIL %s\n", p); return NULL; }
-  }
+  if (fd < 0) { debugPrintf("asset open FAIL %s (FileNotFoundException)\n", p); pending_exception = 1; return NULL; }
   AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
   s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
   debugPrintf("asset open %s (%ld bytes)\n", name, s->size);
@@ -339,9 +333,9 @@ static void SetByteArrayRegion(void *env, int *a, int s, int l, const void *b) {
 static void GetByteArrayRegion(void *env, int *a, int s, int l, void *b) { memcpy(b, (char *)(a + 1) + s, l); }
 static int  PushLocalFrame(void *env, int n) { return 0; }
 static void *PopLocalFrame(void *env, void *r) { return r; }
-static int  ExceptionCheck(void *env) { return 0; }
-static void ExceptionClear(void *env) {}
-static void *ExceptionOccurred(void *env) { return NULL; }
+static int  ExceptionCheck(void *env) { return pending_exception; }
+static void ExceptionClear(void *env) { pending_exception = 0; }
+static void *ExceptionOccurred(void *env) { return pending_exception ? (void *)&pending_exception : NULL; }
 static int  GetObjectClass(void *env, int obj) { return CLASS_GENERIC; }
 static int  GetStaticFieldID(void *env, int c, const char *n, const char *s) { return 1; }
 static int  GetFieldID(void *env, int c, const char *n, const char *s) { return 1; }
