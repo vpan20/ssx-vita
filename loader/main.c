@@ -9,6 +9,9 @@
 #include "so_util.h"
 #include "jni_patch.h"
 #include "stubs.h"
+#ifndef SCE_KERNEL_MEMBLOCK_TYPE_USER_RX
+#define SCE_KERNEL_MEMBLOCK_TYPE_USER_RX (0x0C20D050)
+#endif
 
 #define SCREEN_W 960
 #define SCREEN_H 544
