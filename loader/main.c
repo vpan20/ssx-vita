@@ -42,6 +42,40 @@ static void fatal(const char *msg) {
 
 
 
+
+// ---- Hooking with trampolines (the bundled so_util hook has no continuation) ----------------------
+// Trampoline = first two original instructions (must be position-independent) + jump back to orig+8.
+static uint8_t *tramp_pool; static int tramp_used;
+static void *make_trampoline(uintptr_t target) {
+  if (!tramp_pool) {
+    SceUID b = kuKernelAllocMemBlock("tramp", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, 0x1000, NULL);
+    if (b < 0) { debugPrintf("trampoline pool alloc failed 0x%08X\n", b); return NULL; }
+    sceKernelGetMemBlockBase(b, (void **)&tramp_pool);
+  }
+  uint32_t t[4] = { *(uint32_t *)target, *(uint32_t *)(target + 4), 0xe51ff004, (uint32_t)(target + 8) };
+  uint8_t *at = tramp_pool + tramp_used; tramp_used += 16;
+  kuKernelCpuUnrestrictedMemcpy(at, t, sizeof t);
+  kuKernelFlushCaches(at, 16);
+  return at;
+}
+#define HOOK(off, fn, orig_var) do { uintptr_t a = game_mod.text_base + (off); orig_var = make_trampoline(a); hook_addr(a, (uintptr_t)fn); debugPrintf("hook " #fn " @%p tramp=%p\n", (void *)a, orig_var); } while (0)
+
+// AssetStream::Loader::TranslateStream(parent, asset, stream, flag) — an asset released while still queued reaches
+// here with a dead (zero) type pointer and crashes the translator thread. Report it failed (3) instead.
+static int (*orig_TranslateStream)(void *, void *, void *, int);
+static int hook_TranslateStream(void *parent, void *asset, void *stream, int flag) {
+  if (!asset || !*(uint32_t *)asset) {
+    uint32_t *w = asset;
+    debugPrintf("TranslateStream: dead asset %p: %08X %08X %08X %08X | %08X %08X %08X %08X\n", asset,
+      w ? w[0] : 0, w ? w[1] : 0, w ? w[2] : 0, w ? w[3] : 0, w ? w[4] : 0, w ? w[5] : 0, w ? w[6] : 0, w ? w[7] : 0);
+    return 3;
+  }
+  return orig_TranslateStream(parent, asset, stream, flag);
+}
+static void install_hooks(void) {
+  HOOK(0x63ddf8, hook_TranslateStream, orig_TranslateStream);
+}
+
 static int file_exists(const char *p) { SceIoStat s; return sceIoGetstat(p, &s) >= 0; }
 
 int main(int argc, char *argv[]) {
@@ -67,6 +101,7 @@ int main(int argc, char *argv[]) {
   so_relocate(&game_mod);             debugPrintf("relocate ok\n");
   so_resolve(&game_mod, default_dynlib, default_dynlib_size, 0); debugPrintf("resolve ok\n");
   // TODO(step 4): patch_game() — hook allocator sizes / disable Nimble init / skip vp6 replays once addresses are known from Ghidra.
+  install_hooks();
   so_flush_caches(&game_mod);         debugPrintf("flush ok\n");
   so_initialize(&game_mod);           debugPrintf("initialize ok (static constructors ran)\n");
 
