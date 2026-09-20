@@ -88,7 +88,14 @@ static char *rewrite_memcfg(char *buf, long *size) {
 static AssetStream *asset_open(const char *name) {
   char p[512]; asset_path(p, sizeof p, name);
   SceUID fd = sceIoOpen(p, SCE_O_RDONLY, 0);
-  if (fd < 0) { debugPrintf("asset open FAIL %s (FileNotFoundException)\n", p); pending_exception = 1; return NULL; }
+  if (fd < 0) {
+    size_t pl = strlen(p);
+    if (pl > 4 && !strcmp(p + pl - 4, ".fxo")) {   // shader not shipped (debug-only): substitute the engine's placeholder
+      fd = sceIoOpen(DATA_PATH "/obb/mobile/shaders/errormissing.fxo", SCE_O_RDONLY, 0);
+      debugPrintf("asset open %s missing -> errormissing.fxo (%s)\n", name, fd < 0 ? "FAIL" : "ok");
+    }
+    if (fd < 0) { debugPrintf("asset open FAIL %s (FileNotFoundException)\n", p); pending_exception = 1; return NULL; }
+  }
   AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
   s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
   debugPrintf("asset open %s (%ld bytes)\n", name, s->size);

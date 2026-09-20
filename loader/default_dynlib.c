@@ -26,6 +26,23 @@
 #include <signal.h>
 #include "so_util.h"
 #include "stubs.h"
+// Shader compile/link diagnostics: VitaGL translates GLSL through vitashark; failures are otherwise silent
+static char last_src_head[400];
+void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *len) {
+  if (n > 0 && src && src[0]) { int l = len && len[0] > 0 ? len[0] : (int)strlen(src[0]); if (l > 380) l = 380; memcpy(last_src_head, src[0], l); last_src_head[l] = 0; }
+  glShaderSource(sh, n, src, len);
+}
+void glCompileShader_log(GLuint sh) {
+  glCompileShader(sh);
+  GLint ok = 0; glGetShaderiv(sh, GL_COMPILE_STATUS, &ok);
+  if (!ok) { char log[1024] = ""; GLsizei ln = 0; glGetShaderInfoLog(sh, sizeof log, &ln, log);
+    debugPrintf("SHADER COMPILE FAIL (%u): %s\n--- source head ---\n%s\n---\n", sh, log, last_src_head); }
+}
+void glLinkProgram_log(GLuint p) {
+  glLinkProgram(p);
+  GLint ok = 0; glGetProgramiv(p, GL_LINK_STATUS, &ok);
+  if (!ok) { char log[1024] = ""; GLsizei ln = 0; glGetProgramInfoLog(p, sizeof log, &ln, log); debugPrintf("PROGRAM LINK FAIL (%u): %s\n", p, log); }
+}
 // GL functions absent from VitaGL — no-op/sane-default implementations
 void glBlendColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {}
 void glCompressedTexSubImage2D(GLenum t, GLint l, GLint x, GLint y, GLsizei w, GLsizei h, GLenum f, GLsizei s, const void *d) { static int once; if (!once++) debugPrintf("GL: glCompressedTexSubImage2D called (stub)\n"); }
@@ -252,7 +269,7 @@ so_default_dynlib default_dynlib[] = {
   { "glClearDepthf", (uintptr_t)&glClearDepthf },
   { "glClearStencil", (uintptr_t)&glClearStencil },
   { "glColorMask", (uintptr_t)&glColorMask },
-  { "glCompileShader", (uintptr_t)&glCompileShader },
+  { "glCompileShader", (uintptr_t)&glCompileShader_log },
   { "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D },
   { "glCompressedTexSubImage2D", (uintptr_t)&glCompressedTexSubImage2D },
   { "glCopyTexImage2D", (uintptr_t)&glCopyTexImage2D },
@@ -321,7 +338,7 @@ so_default_dynlib default_dynlib[] = {
   { "glIsShader", (uintptr_t)&glIsShader },
   { "glIsTexture", (uintptr_t)&glIsTexture },
   { "glLineWidth", (uintptr_t)&glLineWidth },
-  { "glLinkProgram", (uintptr_t)&glLinkProgram },
+  { "glLinkProgram", (uintptr_t)&glLinkProgram_log },
   { "glPixelStorei", (uintptr_t)&glPixelStorei },
   { "glPolygonOffset", (uintptr_t)&glPolygonOffset },
   { "glReadPixels", (uintptr_t)&glReadPixels },
@@ -330,7 +347,7 @@ so_default_dynlib default_dynlib[] = {
   { "glSampleCoverage", (uintptr_t)&glSampleCoverage },
   { "glScissor", (uintptr_t)&glScissor },
   { "glShaderBinary", (uintptr_t)&glShaderBinary },
-  { "glShaderSource", (uintptr_t)&glShaderSource },
+  { "glShaderSource", (uintptr_t)&glShaderSource_log },
   { "glStencilFunc", (uintptr_t)&glStencilFunc },
   { "glStencilFuncSeparate", (uintptr_t)&glStencilFuncSeparate },
   { "glStencilMask", (uintptr_t)&glStencilMask },
