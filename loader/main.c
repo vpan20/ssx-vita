@@ -73,7 +73,22 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
   }
   return orig_TranslateStream(parent, asset, stream, flag);
 }
+// AssetStream::Asset::~Asset() (two variants) — log who destroys assets during the first frames, to find the
+// premature release that leaves a dead asset in the translator queue.
+static void (*orig_AssetDtor1)(void *); static void (*orig_AssetDtor2)(void *);
+static int dtor_logged;
+static void log_dtor(void *asset, void *ret) {
+  if (dtor_logged++ < 40) {
+    uint32_t *w = asset; const char *nm = (const char *)w[8];   // best-effort: name pointer often near +0x20
+    debugPrintf("~Asset(%p) from %p (game+0x%X) size=%u name@+0x20=%p\n", asset, ret, (unsigned)((uintptr_t)ret - game_mod.text_base), w[2], nm);
+  }
+}
+static void hook_AssetDtor1(void *asset) { log_dtor(asset, __builtin_return_address(0)); orig_AssetDtor1(asset); }
+static void hook_AssetDtor2(void *asset) { log_dtor(asset, __builtin_return_address(0)); orig_AssetDtor2(asset); }
+
 static void install_hooks(void) {
+  HOOK(0x638408, hook_AssetDtor1, orig_AssetDtor1);
+  HOOK(0x639180, hook_AssetDtor2, orig_AssetDtor2);
   HOOK(0x63ddf8, hook_TranslateStream, orig_TranslateStream);
 }
 
