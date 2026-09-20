@@ -70,9 +70,7 @@ int pthread_cond_destroy_bridge(void **slot) {
 int pthread_cond_signal_bridge(void **slot)    { return pthread_cond_signal(cond_get(slot)); }
 int pthread_cond_broadcast_bridge(void **slot) { return pthread_cond_broadcast(cond_get(slot)); }
 int pthread_cond_wait_bridge(void **c, void **m) { return pthread_cond_wait(cond_get(c), mutex_get(m)); }
-int pthread_cond_timedwait_bridge(void **c, void **m, const struct timespec *ts) {
-  return pthread_cond_timedwait(cond_get(c), mutex_get(m), ts);
-}
+int pthread_cond_timedwait_bridge(void **c, void **m, const struct timespec *ts);
 
 // ---------- attr (Bionic: 24-byte struct; we use its first word as a pointer to the real attr) ----------
 typedef struct { pthread_attr_t *real; int pad[5]; } bionic_attr;
@@ -160,7 +158,45 @@ int sem_destroy_bridge(void **slot) { if (!IS_UNINIT(*slot)) { sem_destroy((sem_
 int sem_post_bridge(void **slot)    { return sem_post(sem_get(slot)); }
 int sem_wait_bridge(void **slot)    { return sem_wait(sem_get(slot)); }
 int sem_trywait_bridge(void **slot) { return sem_trywait(sem_get(slot)); }
-int sem_timedwait_bridge(void **slot, const struct timespec *ts) { return sem_timedwait(sem_get(slot), ts); }
+// ---- timed waits ----
+// The game builds absolute deadlines from clock_gettime(CLOCK_MONOTONIC or REALTIME); vitasdk's sem_timedwait /
+// pthread_cond_timedwait compare against a different clock, so every timed wait expired instantly (spinning threads,
+// re-processed jobs). Convert to a relative timeout against whichever clock the deadline is consistent with.
+static long long ts_ns(const struct timespec *t) { return (long long)t->tv_sec * 1000000000LL + t->tv_nsec; }
+static long long now_ns(clockid_t c) { struct timespec t; clock_gettime(c, &t); return ts_ns(&t); }
+static long long rel_timeout_ns(const struct timespec *abs) {
+  if (!abs) return -1;
+  long long a = ts_ns(abs), r1 = a - now_ns(CLOCK_MONOTONIC), r2 = a - now_ns(CLOCK_REALTIME);
+  const long long HOUR = 3600LL * 1000000000LL;
+  if (r1 >= 0 && r1 <= HOUR) return r1;
+  if (r2 >= 0 && r2 <= HOUR) return r2;
+  if (r1 < 0 && r2 < 0) return 0;          // genuinely in the past
+  return HOUR;                             // absurd deadline: cap
+}
+int sem_timedwait_bridge(void **slot, const struct timespec *ts) {
+  sem_t *s = sem_get(slot);
+  long long rel = rel_timeout_ns(ts), waited = 0;
+  for (;;) {
+    if (sem_trywait(s) == 0) return 0;
+    if (rel >= 0 && waited >= rel) { errno = ETIMEDOUT; return -1; }
+    sceKernelDelayThread(250); waited += 250000;
+  }
+}
 int sem_getvalue_bridge(void **slot, int *v) { return sem_getvalue(sem_get(slot), v); }
 
 int sched_yield_bridge(void) { sceKernelDelayThread(0); return 0; }
+
+int pthread_cond_timedwait_bridge(void **c, void **m, const struct timespec *ts) {
+  long long rel = rel_timeout_ns(ts);
+  if (rel < 0) return pthread_cond_wait(cond_get(c), mutex_get(m));
+  long long waited = 0;
+  while (1) {
+    long long slice = rel - waited; if (slice > 2000000LL) slice = 2000000LL;   // 2ms slices: robust even if the wait returns early
+    long long start = now_ns(CLOCK_MONOTONIC);
+    struct timespec abs; long long dl = now_ns(CLOCK_REALTIME) + slice; abs.tv_sec = dl / 1000000000LL; abs.tv_nsec = dl % 1000000000LL;
+    int r = pthread_cond_timedwait(cond_get(c), mutex_get(m), &abs);
+    if (r != ETIMEDOUT) return r;
+    long long el = now_ns(CLOCK_MONOTONIC) - start; if (el < 0) el = 0; waited += el > 0 ? el : slice;
+    if (waited >= rel) return ETIMEDOUT;
+  }
+}
