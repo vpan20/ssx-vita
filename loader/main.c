@@ -106,6 +106,33 @@ static void log_dtor(void *asset, void *ret) {
 static void hook_AssetDtor1(void *asset) { log_dtor(asset, __builtin_return_address(0)); orig_AssetDtor1(asset); }
 static void hook_AssetDtor2(void *asset) { log_dtor(asset, __builtin_return_address(0)); orig_AssetDtor2(asset); }
 
+// ---- watchdog: every 4s, log what every registered thread is doing (status / wait type) ----
+typedef struct { SceUID uid; char name[32]; } thread_rec;
+extern thread_rec thread_registry[64]; extern int thread_registry_n;
+void thread_registry_add(SceUID uid, const char *nm);
+static const char *wait_name(int wt) {
+  switch (wt) { case 1: return "sleep"; case 2: return "delay"; case 3: return "sema"; case 4: return "eventflag"; case 5: return "mutex"; case 6: return "cond"; case 8: return "lwmutex"; case 10: return "lwcond"; case 12: return "msgpipe"; case 13: return "thread-end"; default: return "?"; }
+}
+static int watchdog_fn(SceSize args, void *argp) {
+  for (int tick = 0;; tick++) {
+    sceKernelDelayThread(4 * 1000 * 1000);
+    char line[900] = "WATCHDOG:"; int n = 0;
+    for (int i = 0; i < thread_registry_n && n < 20; i++) {
+      SceKernelThreadInfo ti = { .size = sizeof ti };
+      if (sceKernelGetThreadInfo(thread_registry[i].uid, &ti) < 0) continue;
+      char b[64]; snprintf(b, sizeof b, " [%s:%s%s]", thread_registry[i].name, ti.status == SCE_THREAD_RUNNING ? "run" : ti.status == SCE_THREAD_READY ? "ready" : ti.status == SCE_THREAD_WAITING ? "wait" : ti.status == SCE_THREAD_DORMANT ? "dormant" : "?", ti.status == SCE_THREAD_WAITING ? wait_name(ti.waitType) : "");
+      strncat(line, b, sizeof line - strlen(line) - 1); n++;
+    }
+    debugPrintf("%s\n", line);
+  }
+  return 0;
+}
+static void start_watchdog(void) {
+  thread_registry_add(sceKernelGetThreadId(), "main");
+  SceUID t = sceKernelCreateThread("watchdog", watchdog_fn, 0x10000100, 0x4000, 0, 0, NULL);
+  if (t >= 0) sceKernelStartThread(t, 0, NULL);
+}
+
 static void install_hooks(void) {
   HOOK(0x638408, hook_AssetDtor1, orig_AssetDtor1);
   HOOK(0x639180, hook_AssetDtor2, orig_AssetDtor2);
@@ -152,6 +179,7 @@ int main(int argc, char *argv[]) {
   // 4. JNI boot sequence (order taken from Blast's MainActivity.onCreate / MainThread.run).
   //    Every entry is called with a full 8-word argument set; extras are harmless on ARM.
   jni_init();
+  start_watchdog();
   typedef void (*fn_jni)(void *env, void *thiz, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
   #define J(name) ((fn_jni)so_symbol(&game_mod, name))
   #define CALL(name, ...) do { fn_jni f = J(name); if (!f) fatal("missing " name); f(fake_env, NULL, __VA_ARGS__); debugPrintf(name " ok\n"); } while (0)

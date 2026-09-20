@@ -23,7 +23,8 @@ int fork(void){return -1;}
 int execv(const char*p,char*const a[]){return -1;}
 int system(const char*c){return -1;}
 int waitpid(int p,int*s,int o){return -1;}
-int prctl(int o,...){return 0;}
+void thread_registry_add(int uid, const char *nm);
+int prctl(int o,...){ if (o == 15) { va_list a; va_start(a, o); const char *nm = va_arg(a, const char *); va_end(a); thread_registry_add(sceKernelGetThreadId(), nm); debugPrintf("thread name: %s\n", nm ? nm : "?"); } return 0; }
 long syscall(long n,...){return -1;}
 void*mmap(void*a,size_t l,int p,int f,int fd,long off){void*m=memalign(0x1000,l);if(m)memset(m,0,l);debugPrintf("mmap(%u) -> %p\n",(unsigned)l,m);return m?m:(void*)-1;}
 int munmap(void*a,size_t l){free(a);return 0;}

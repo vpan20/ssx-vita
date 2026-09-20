@@ -105,9 +105,20 @@ int pthread_setschedparam_bridge(pthread_t t, int policy, const void *param) { r
 // Worker threads run one notch above the main thread (as EAThread's priorities do on Android) and on any core;
 // otherwise the Vita scheduler lets the main thread starve loader/translator threads and asset lifetimes race.
 static int main_prio = 0;
+// thread registry for the watchdog (names come from prctl(PR_SET_NAME) which EAThread uses)
+typedef struct { SceUID uid; char name[32]; } thread_rec;
+thread_rec thread_registry[64]; int thread_registry_n;
+static pthread_mutex_t reg_lock = PTHREAD_MUTEX_INITIALIZER;
+void thread_registry_add(SceUID uid, const char *nm) {
+  pthread_mutex_lock(&reg_lock);
+  for (int i = 0; i < thread_registry_n; i++) if (thread_registry[i].uid == uid) { if (nm) strncpy(thread_registry[i].name, nm, 31); pthread_mutex_unlock(&reg_lock); return; }
+  if (thread_registry_n < 64) { thread_registry[thread_registry_n].uid = uid; strncpy(thread_registry[thread_registry_n].name, nm ? nm : "?", 31); thread_registry_n++; }
+  pthread_mutex_unlock(&reg_lock);
+}
 typedef struct { void *(*fn)(void *); void *arg; } thread_boot;
 static void *thread_boot_fn(void *p) {
   thread_boot b = *(thread_boot *)p; free(p);
+  thread_registry_add(sceKernelGetThreadId(), "pthread");
   if (main_prio) sceKernelChangeThreadPriority(0, main_prio - 1);
   sceKernelChangeThreadCpuAffinityMask(0, 0x70000);   // any of the 3 user cores
   return b.fn(b.arg);
