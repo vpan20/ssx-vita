@@ -79,8 +79,16 @@ static void (*orig_AssetDtor1)(void *); static void (*orig_AssetDtor2)(void *);
 static int dtor_logged;
 static void log_dtor(void *asset, void *ret) {
   if (dtor_logged++ < 40) {
-    uint32_t *w = asset; const char *nm = (const char *)w[8];   // best-effort: name pointer often near +0x20
-    debugPrintf("~Asset(%p) from %p (game+0x%X) size=%u name@+0x20=%p\n", asset, ret, (unsigned)((uintptr_t)ret - game_mod.text_base), w[2], nm);
+    uint32_t *w = asset;
+    debugPrintf("~Asset(%p) from game+0x%X size=%u\n", asset, (unsigned)((uintptr_t)ret - game_mod.text_base), w[2]);
+    // poor man's backtrace: every word on the stack above us that points into game code
+    uint32_t *sp; __asm__ volatile("mov %0, sp" : "=r"(sp));
+    char line[400] = "   stack:"; int n = 0;
+    for (int i = 0; i < 96 && n < 12; i++) {
+      uint32_t v = sp[i];
+      if (v >= game_mod.text_base && v < game_mod.text_base + game_mod.text_size) { char b[16]; snprintf(b, sizeof b, " +0x%X", (unsigned)(v - game_mod.text_base)); strcat(line, b); n++; }
+    }
+    debugPrintf("%s\n", line);
   }
 }
 static void hook_AssetDtor1(void *asset) { log_dtor(asset, __builtin_return_address(0)); orig_AssetDtor1(asset); }
