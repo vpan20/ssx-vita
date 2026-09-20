@@ -71,7 +71,19 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
       w ? w[0] : 0, w ? w[1] : 0, w ? w[2] : 0, w ? w[3] : 0, w ? w[4] : 0, w ? w[5] : 0, w ? w[6] : 0, w ? w[7] : 0);
     return 3;
   }
-  return orig_TranslateStream(parent, asset, stream, flag);
+  {
+    uint32_t *w = asset; const char *nm = (const char *)w[6]; uint32_t *sw = stream;
+    static int n; if (n++ < 30) debugPrintf("TranslateStream: %s asset=%p size=%u/%u streamsize=%u flag=%d\n", nm ? nm : "?", asset, w[2], w[3], sw ? sw[4] : 0, flag);
+  }
+  int r = orig_TranslateStream(parent, asset, stream, flag);
+  { static int n2; if (n2++ < 30) debugPrintf("  -> %d\n", r); }
+  return r;
+}
+// AssetStream::Loader::ChunkifyFail(asset): the loader gave up reading this asset's data
+static void (*orig_ChunkifyFail)(void *);
+static void hook_ChunkifyFail(void *asset) {
+  uint32_t *w = asset; debugPrintf("ChunkifyFail: %s asset=%p\n", w && w[6] ? (const char *)w[6] : "?", asset);
+  orig_ChunkifyFail(asset);
 }
 // AssetStream::Asset::~Asset() (two variants) — log who destroys assets during the first frames, to find the
 // premature release that leaves a dead asset in the translator queue.
@@ -98,6 +110,7 @@ static void install_hooks(void) {
   HOOK(0x638408, hook_AssetDtor1, orig_AssetDtor1);
   HOOK(0x639180, hook_AssetDtor2, orig_AssetDtor2);
   HOOK(0x63ddf8, hook_TranslateStream, orig_TranslateStream);
+  HOOK(0x642980, hook_ChunkifyFail, orig_ChunkifyFail);
 }
 
 static int file_exists(const char *p) { SceIoStat s; return sceIoGetstat(p, &s) >= 0; }
