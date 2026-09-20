@@ -84,9 +84,9 @@ static void log_dtor(void *asset, void *ret) {
     // poor man's backtrace: every word on the stack above us that points into game code
     uint32_t *sp; __asm__ volatile("mov %0, sp" : "=r"(sp));
     char line[400] = "   stack:"; int n = 0;
-    for (int i = 0; i < 96 && n < 12; i++) {
+    for (int i = 0; i < 256 && n < 16; i++) {
       uint32_t v = sp[i];
-      if (v >= game_mod.text_base && v < game_mod.text_base + game_mod.text_size) { char b[16]; snprintf(b, sizeof b, " +0x%X", (unsigned)(v - game_mod.text_base)); strcat(line, b); n++; }
+      if (v >= game_mod.text_base && v < game_mod.text_base + 0x166D000) { char b[16]; snprintf(b, sizeof b, " +0x%X", (unsigned)(v - game_mod.text_base)); strcat(line, b); n++; }
     }
     debugPrintf("%s\n", line);
   }
