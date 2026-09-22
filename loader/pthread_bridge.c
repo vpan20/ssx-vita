@@ -104,7 +104,8 @@ int pthread_setschedparam_bridge(pthread_t t, int policy, const void *param) { r
 // ---------- threads ----------
 // Worker threads run one notch below the main thread and on any core;
 // otherwise the Vita scheduler lets the main thread starve loader/translator threads and asset lifetimes race.
-static int main_prio = 0;
+int main_thread_prio = 0;
+#define main_prio main_thread_prio
 // thread registry for the watchdog (names come from prctl(PR_SET_NAME) which EAThread uses)
 typedef struct { SceUID uid; char name[32]; } thread_rec;
 thread_rec thread_registry[64]; int thread_registry_n;
