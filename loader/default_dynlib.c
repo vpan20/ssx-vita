@@ -26,6 +26,9 @@
 #include <signal.h>
 #include "so_util.h"
 #include "stubs.h"
+// usleep/nanosleep with a floor: the game uses tiny sleeps as yields; on Vita a 0us delay never yields
+int usleep_yield(useconds_t us) { sceKernelDelayThread(us < 100 ? 100 : us); return 0; }
+int nanosleep_yield(const struct timespec *req, struct timespec *rem) { long long us = req ? (long long)req->tv_sec * 1000000 + req->tv_nsec / 1000 : 0; sceKernelDelayThread(us < 100 ? 100 : (SceUInt)us); return 0; }
 // Shader compile/link diagnostics: VitaGL translates GLSL through vitashark; failures are otherwise silent
 static char last_src_head[400];
 void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *len) {
@@ -427,7 +430,7 @@ so_default_dynlib default_dynlib[] = {
   { "mmap", (uintptr_t)&mmap },
   { "modf", (uintptr_t)&modf },
   { "munmap", (uintptr_t)&munmap },
-  { "nanosleep", (uintptr_t)&nanosleep },
+  { "nanosleep", (uintptr_t)&nanosleep_yield },
   { "open", (uintptr_t)&open_log },
   { "opendir", (uintptr_t)&opendir },
   { "poll", (uintptr_t)&poll },
@@ -551,7 +554,7 @@ so_default_dynlib default_dynlib[] = {
   { "ungetc", (uintptr_t)&ungetc },
   { "unlink", (uintptr_t)&unlink },
   { "unsetenv", (uintptr_t)&unsetenv },
-  { "usleep", (uintptr_t)&usleep },
+  { "usleep", (uintptr_t)&usleep_yield },
   { "utime", (uintptr_t)&utime },
   { "vprintf", (uintptr_t)&vprintf },
   { "vsnprintf", (uintptr_t)&vsnprintf },

@@ -102,7 +102,7 @@ int pthread_getschedparam_bridge(pthread_t t, int *policy, void *param) { if (po
 int pthread_setschedparam_bridge(pthread_t t, int policy, const void *param) { return 0; }
 
 // ---------- threads ----------
-// Worker threads run one notch above the main thread (as EAThread's priorities do on Android) and on any core;
+// Worker threads run one notch below the main thread and on any core;
 // otherwise the Vita scheduler lets the main thread starve loader/translator threads and asset lifetimes race.
 static int main_prio = 0;
 // thread registry for the watchdog (names come from prctl(PR_SET_NAME) which EAThread uses)
@@ -119,7 +119,7 @@ typedef struct { void *(*fn)(void *); void *arg; } thread_boot;
 static void *thread_boot_fn(void *p) {
   thread_boot b = *(thread_boot *)p; free(p);
   thread_registry_add(sceKernelGetThreadId(), "pthread");
-  if (main_prio) sceKernelChangeThreadPriority(0, main_prio - 1);
+  if (main_prio) sceKernelChangeThreadPriority(0, main_prio + 1);   // one notch BELOW main: spinning workers must never starve it
   sceKernelChangeThreadCpuAffinityMask(0, 0x70000);   // any of the 3 user cores
   return b.fn(b.arg);
 }
@@ -195,7 +195,7 @@ int sem_timedwait_bridge(void **slot, const struct timespec *ts) {
 }
 int sem_getvalue_bridge(void **slot, int *v) { return sem_getvalue(sem_get(slot), v); }
 
-int sched_yield_bridge(void) { sceKernelDelayThread(0); return 0; }
+int sched_yield_bridge(void) { sceKernelDelayThread(100); return 0; }   // a real yield: DelayThread(0) does not let lower-priority threads run
 
 int pthread_cond_timedwait_bridge(void **c, void **m, const struct timespec *ts) {
   long long rel = rel_timeout_ns(ts);
