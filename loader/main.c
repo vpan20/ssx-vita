@@ -64,7 +64,26 @@ static void *make_trampoline(uintptr_t target) {
 // AssetStream::Loader::TranslateStream(parent, asset, stream, flag) — an asset released while still queued reaches
 // here with a dead (zero) type pointer and crashes the translator thread. Report it failed (3) instead.
 static int (*orig_TranslateStream)(void *, void *, void *, int);
+// Idempotence guard: the translator thread can be woken twice for one queue head (removal is done by another thread).
+// Remember assets we already translated; on a repeat, skip the work and swallow the extra Release that would free it.
+#define DONE_N 64
+static struct { void *asset; const char *name; } done[DONE_N]; static int done_i;
+static void *skip_release_for;
+static void forget_done(void *asset) { for (int i = 0; i < DONE_N; i++) if (done[i].asset == asset) done[i].asset = NULL; }
+static int already_done(void *asset, const char *nm) {
+  for (int i = 0; i < DONE_N; i++) if (done[i].asset == asset && done[i].name == nm) return 1;
+  return 0;
+}
+static void (*orig_AssetRelease)(void *, int, int);
+static void hook_AssetRelease(void *asset, int b, int state) {
+  if (asset == skip_release_for) { skip_release_for = NULL; debugPrintf("Release(%p) suppressed (duplicate translate)\n", asset); return; }
+  orig_AssetRelease(asset, b, state);
+}
 static int hook_TranslateStream(void *parent, void *asset, void *stream, int flag) {
+  if (asset && *(uint32_t *)asset) {
+    const char *nm = (const char *)((uint32_t *)asset)[6];
+    if (already_done(asset, nm)) { debugPrintf("TranslateStream: duplicate for %s — skipped\n", nm ? nm : "?"); skip_release_for = asset; return 4; }
+  }
   if (!asset || !*(uint32_t *)asset) {
     uint32_t *w = asset;
     debugPrintf("TranslateStream: dead asset %p: %08X %08X %08X %08X | %08X %08X %08X %08X\n", asset,
@@ -77,6 +96,7 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
   }
   int r = orig_TranslateStream(parent, asset, stream, flag);
   { static int n2; if (n2++ < 30) debugPrintf("  -> %d\n", r); }
+  if (r == 4) { done[done_i].asset = asset; done[done_i].name = (const char *)((uint32_t *)asset)[6]; done_i = (done_i + 1) % DONE_N; }
   return r;
 }
 // AssetStream::Loader::ChunkifyFail(asset): the loader gave up reading this asset's data
@@ -88,6 +108,7 @@ static void hook_ChunkifyFail(void *asset) {
 // AssetStream::Asset::~Asset() (two variants) — log who destroys assets during the first frames, to find the
 // premature release that leaves a dead asset in the translator queue.
 static void (*orig_AssetDtor1)(void *); static void (*orig_AssetDtor2)(void *);
+static void forget_done(void *asset);
 static int dtor_logged;
 static void log_dtor(void *asset, void *ret) {
   if (dtor_logged++ < 40) {
@@ -103,8 +124,8 @@ static void log_dtor(void *asset, void *ret) {
     debugPrintf("%s\n", line);
   }
 }
-static void hook_AssetDtor1(void *asset) { log_dtor(asset, __builtin_return_address(0)); orig_AssetDtor1(asset); }
-static void hook_AssetDtor2(void *asset) { log_dtor(asset, __builtin_return_address(0)); orig_AssetDtor2(asset); }
+static void hook_AssetDtor1(void *asset) { log_dtor(asset, __builtin_return_address(0)); forget_done(asset); orig_AssetDtor1(asset); }
+static void hook_AssetDtor2(void *asset) { log_dtor(asset, __builtin_return_address(0)); forget_done(asset); orig_AssetDtor2(asset); }
 
 // ---- watchdog: every 4s, log what every registered thread is doing (status / wait type) ----
 typedef struct { SceUID uid; char name[32]; } thread_rec;
@@ -138,6 +159,7 @@ static void install_hooks(void) {
   HOOK(0x639180, hook_AssetDtor2, orig_AssetDtor2);
   HOOK(0x63ddf8, hook_TranslateStream, orig_TranslateStream);
   HOOK(0x642980, hook_ChunkifyFail, orig_ChunkifyFail);
+  HOOK(0x63ae4c, hook_AssetRelease, orig_AssetRelease);
 }
 
 static int file_exists(const char *p) { SceIoStat s; return sceIoGetstat(p, &s) >= 0; }
