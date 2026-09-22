@@ -68,7 +68,6 @@ static int (*orig_TranslateStream)(void *, void *, void *, int);
 // Remember assets we already translated; on a repeat, skip the work and swallow the extra Release that would free it.
 #define DONE_N 64
 static struct { void *asset; const char *name; } done[DONE_N]; static int done_i;
-static void *skip_release_for;
 static void forget_done(void *asset) { for (int i = 0; i < DONE_N; i++) if (done[i].asset == asset) done[i].asset = NULL; }
 static int already_done(void *asset, const char *nm) {
   for (int i = 0; i < DONE_N; i++) if (done[i].asset == asset && done[i].name == nm) return 1;
@@ -76,13 +75,18 @@ static int already_done(void *asset, const char *nm) {
 }
 static void (*orig_AssetRelease)(void *, int, int);
 static void hook_AssetRelease(void *asset, int b, int state) {
-  if (asset == skip_release_for) { skip_release_for = NULL; debugPrintf("Release(%p) suppressed (duplicate translate)\n", asset); return; }
+  { static int n; if (n++ < 12) debugPrintf("Release(%p, %d, %d) refs=%u from game+0x%X\n", asset, b, state, (((uint32_t *)asset)[8]) >> 2, (unsigned)((uintptr_t)__builtin_return_address(0) - game_mod.text_base)); }
   orig_AssetRelease(asset, b, state);
 }
 static int hook_TranslateStream(void *parent, void *asset, void *stream, int flag) {
   if (asset && *(uint32_t *)asset) {
     const char *nm = (const char *)((uint32_t *)asset)[6];
-    if (already_done(asset, nm)) { debugPrintf("TranslateStream: duplicate for %s — skipped\n", nm ? nm : "?"); skip_release_for = asset; return 4; }
+    if (already_done(asset, nm)) {
+      // refcount lives in bits 2..31 of word +0x20; add one reference so the translator's Release cannot free it
+      uint32_t *rc = &((uint32_t *)asset)[8]; *rc += 4;
+      static int n; if (n++ < 10) debugPrintf("TranslateStream: duplicate for %s — skipped (refs now %u)\n", nm ? nm : "?", (*rc) >> 2);
+      return 4;
+    }
   }
   if (!asset || !*(uint32_t *)asset) {
     uint32_t *w = asset;
