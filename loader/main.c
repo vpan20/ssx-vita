@@ -82,10 +82,10 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
   if (asset && *(uint32_t *)asset) {
     const char *nm = (const char *)((uint32_t *)asset)[6];
     if (already_done(asset, nm)) {
-      // refcount lives in bits 2..31 of word +0x20; add one reference so the translator's Release cannot free it
+      // Duplicate wake for the same queue head. TranslateStream must still run (it releases the loader lock on exit),
+      // so let it; just add one reference (bits 2..31 of word +0x20) so the follow-up Release cannot free the asset.
       uint32_t *rc = &((uint32_t *)asset)[8]; *rc += 4;
-      static int n; if (n++ < 10) debugPrintf("TranslateStream: duplicate for %s — skipped (refs now %u)\n", nm ? nm : "?", (*rc) >> 2);
-      return 4;
+      static int n; if (n++ < 10) debugPrintf("TranslateStream: duplicate for %s — re-running with extra ref (refs now %u)\n", nm ? nm : "?", (*rc) >> 2);
     }
   }
   if (!asset || !*(uint32_t *)asset) {
