@@ -26,13 +26,37 @@
 #include <signal.h>
 #include "so_util.h"
 #include "stubs.h"
+// clock_gettime: every clock id reports the same wall clock vitasdk's sem_timedwait/pthread_cond_timedwait compare
+// against (soloader convention). Otherwise CLOCK_MONOTONIC-based deadlines are misread and every timed wait expires at once.
+int clock_gettime_rt(int clk, struct timespec *t) { return clock_gettime(CLOCK_REALTIME, t); }   // exactly what pthread-embedded's timeout conversion (ftime) uses
 // usleep/nanosleep with a floor: the game uses tiny sleeps as yields; on Vita a 0us delay never yields
 int usleep_yield(useconds_t us) { sceKernelDelayThread(us < 100 ? 100 : us); return 0; }
 int nanosleep_yield(const struct timespec *req, struct timespec *rem) { long long us = req ? (long long)req->tv_sec * 1000000 + req->tv_nsec / 1000 : 0; sceKernelDelayThread(us < 100 ? 100 : (SceUInt)us); return 0; }
 // Shader compile/link diagnostics: VitaGL translates GLSL through vitashark; failures are otherwise silent
 static char last_src_head[400];
+// GLSL pre-pass for VitaGL's translator: it does not handle the "*=" operator (documented FIXME), so rewrite
+// "lhs *= rhs;" as "lhs = lhs * rhs;". lhs = identifier with optional .swizzle / [index] chain.
+static int is_id_char(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '[' || c == ']'; }
+static char *glsl_prepass(const char *src, int len) {
+  int extra = 0; for (int i = 0; i + 1 < len; i++) if (src[i] == '*' && src[i+1] == '=') extra += 64;
+  char *out = malloc(len + extra + 1); int o = 0;
+  for (int i = 0; i < len; ) {
+    if (src[i] == '*' && i + 1 < len && src[i+1] == '=') {
+      int e = o; while (e > 0 && (out[e-1] == ' ' || out[e-1] == '\t')) e--;   // end of lhs in out
+      int s = e; while (s > 0 && is_id_char(out[s-1])) s--;
+      int ll = e - s;
+      if (ll > 0 && ll < 48) { out[o++] = '='; out[o++] = ' '; memcpy(out + o, out + s, ll); o += ll; out[o++] = ' '; out[o++] = '*'; i += 2; continue; }
+    }
+    out[o++] = src[i++];
+  }
+  out[o] = 0; return out;
+}
 void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *len) {
-  if (n > 0 && src && src[0]) { int l = len && len[0] > 0 ? len[0] : (int)strlen(src[0]); if (l > 380) l = 380; memcpy(last_src_head, src[0], l); last_src_head[l] = 0; }
+  if (n > 0 && src && src[0]) {
+    int l = len && len[0] > 0 ? len[0] : (int)strlen(src[0]);
+    int h = l > 380 ? 380 : l; memcpy(last_src_head, src[0], h); last_src_head[h] = 0;
+    if (n == 1) { char *fixed = glsl_prepass(src[0], l); const GLchar *one[1] = { fixed }; glShaderSource(sh, 1, one, NULL); free(fixed); return; }
+  }
   glShaderSource(sh, n, src, len);
 }
 void glCompileShader_log(GLuint sh) {
@@ -203,7 +227,7 @@ so_default_dynlib default_dynlib[] = {
   { "chdir", (uintptr_t)&chdir },
   { "chmod", (uintptr_t)&chmod },
   { "clock", (uintptr_t)&clock },
-  { "clock_gettime", (uintptr_t)&clock_gettime },
+  { "clock_gettime", (uintptr_t)&clock_gettime_rt },
   { "close", (uintptr_t)&close },
   { "closedir", (uintptr_t)&closedir },
   { "connect", (uintptr_t)&connect },

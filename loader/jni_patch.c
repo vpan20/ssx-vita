@@ -38,7 +38,20 @@ static const char *dev_uid(void)     { return "0123456789abcdef"; }
 static const char *dev_fp(void)      { return "neon vfpv3"; }
 static const char *app_ver(void)     { return "0.0.7833"; }
 static int app_vercode(void)         { return 7833; }
-static int audio_write(uintptr_t obj, int *arr, int off, int len) { return len; }  // pretend consumed   // all EGL10.* calls report success; VitaGL owns the context
+// android.media.AudioTrack emulation → SceAudio. The game mixes into a short[] and calls write(buf, off, len) (len in shorts).
+#define AUDIO_GRAIN 1024   // frames per sceAudioOut push
+static int audio_port = -1; static short audio_buf[AUDIO_GRAIN * 2]; static int audio_fill;
+static int audio_write(uintptr_t obj, int *arr, int off, int len) {
+  if (audio_port < 0) { audio_port = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_MAIN, AUDIO_GRAIN, 44100, SCE_AUDIO_OUT_MODE_STEREO); debugPrintf("audio: port %d\n", audio_port); if (audio_port < 0) return len; }
+  const short *src = (const short *)(arr + 1) + off; int n = len;
+  while (n > 0) {
+    int take = AUDIO_GRAIN * 2 - audio_fill; if (take > n) take = n;
+    memcpy(audio_buf + audio_fill, src, take * sizeof(short)); audio_fill += take; src += take; n -= take;
+    if (audio_fill == AUDIO_GRAIN * 2) { sceAudioOutOutput(audio_port, audio_buf); audio_fill = 0; }
+  }
+  return len;
+}
+static void audio_play(void) {} static void audio_stop(void) { if (audio_port >= 0) { audio_fill = 0; } }   // all EGL10.* calls report success; VitaGL owns the context
 
 // ---- Android AssetManager emulation on top of DATA_PATH/obb ----------------------------
 #define TAG_ASSET_MGR 0x41534D47
@@ -175,7 +188,7 @@ static jni_method methods[] = {
   { "GetPrimaryExternalStorageDirectory",(uintptr_t)storage_ext },
   { "GetPrimaryExternalStorageState",(uintptr_t)ret1 },
   // android/media/AudioTrack via EAAudioCore Java helper — PCM sink; real SceAudio output comes later
-  { "play",                 (uintptr_t)retv }, { "stop",              (uintptr_t)retv },
+  { "play",                 (uintptr_t)audio_play }, { "stop",              (uintptr_t)audio_stop },
   { "write",                (uintptr_t)audio_write },
   { "Startup",              (uintptr_t)retv }, { "Shutdown",          (uintptr_t)retv },
   // com/ea/blast/MainActivity / DisplayAndroidDelegate
@@ -189,9 +202,12 @@ static jni_method methods[] = {
   { "Initialize",           (uintptr_t)retv },{ "IsInitialized",     (uintptr_t)ret1 },
   { "RequestTierInfo",      (uintptr_t)retv },{ "RequestPurchase",   (uintptr_t)retv },
   { "RestorePurchaseItems", (uintptr_t)retv },{ "AuthenticatePurchase",(uintptr_t)retv },
-  // com/ea/VideoPlayer/PlayerAndroid — stubbed: report immediate completion
+  // com/ea/VideoPlayer/PlayerAndroid — videos are skipped: Play reports finished at once
   { "Play",                 (uintptr_t)retv },{ "Stop",              (uintptr_t)retv },
-  { "IsPlaying",            (uintptr_t)ret0 },
+  { "IsPlaying",            (uintptr_t)ret0 },{ "IsFinished",        (uintptr_t)ret1 },{ "HasFinished", (uintptr_t)ret1 },
+  { "GetPosition",          (uintptr_t)ret0 },{ "GetDuration",       (uintptr_t)ret1 },{ "GetState", (uintptr_t)ret0 },
+  { "Prepare",              (uintptr_t)ret1 },{ "Load",              (uintptr_t)ret1 },{ "Pause", (uintptr_t)retv },
+  { "Resume",               (uintptr_t)retv },{ "Release",           (uintptr_t)retv },{ "SetVolume", (uintptr_t)retv },
   { "<init>",               (uintptr_t)ret1 },
   // device capability queries (DeviceAndroid delegate)
   { "GetAccelerometerCount", (uintptr_t)ret0 }, { "GetCameraCount", (uintptr_t)ret0 }, { "GetCompassCount", (uintptr_t)ret0 },

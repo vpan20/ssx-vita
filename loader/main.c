@@ -237,20 +237,43 @@ int main(int argc, char *argv[]) {
   debugPrintf("boot chain complete — entering frame loop\n");
 
   // 5. Frame loop. Android calls NativeOnDrawFrame from GLSurfaceView; we do the same and swap ourselves.
-  sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
+  //    Input goes through the game's own gamepad path (Xperia/console controller support) — no touch emulation.
   sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG_WIDE);
+  sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
+  fn_jni PadDown = J("Java_com_ea_ssx_MainActivityGenerated_NativeOnControllerKeyDown");
+  fn_jni PadUp   = J("Java_com_ea_ssx_MainActivityGenerated_NativeOnControllerKeyUp");
+  fn_jni PadAxis = J("Java_com_ea_ssx_MainActivityGenerated_NativeOnControllerMotion");
+  fn_jni PadConn = J("Java_com_ea_ssx_MainActivityGenerated_NativeOnControllerConnectState");
+  if (PadConn) PadConn(fake_env, NULL, 0, 1, 0,0,0,0);   // device 0 connected
+  // Vita button -> Android keycode
+  static const struct { unsigned vita; int key; } padmap[] = {
+    { SCE_CTRL_UP, 19 }, { SCE_CTRL_DOWN, 20 }, { SCE_CTRL_LEFT, 21 }, { SCE_CTRL_RIGHT, 22 },
+    { SCE_CTRL_CROSS, 96 }, { SCE_CTRL_CIRCLE, 97 }, { SCE_CTRL_SQUARE, 99 }, { SCE_CTRL_TRIANGLE, 100 },
+    { SCE_CTRL_LTRIGGER, 102 }, { SCE_CTRL_RTRIGGER, 103 }, { SCE_CTRL_START, 108 }, { SCE_CTRL_SELECT, 109 },
+  };
+  unsigned prev_buttons = 0; float prev_axis[4] = { 0 };
   int touching = 0; unsigned frame = 0;
   for (;;) {
     if (frame < 5 || frame % 300 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB)\n", frame, fi.size_user / 1024, fi.size_cdram / 1024); }
     frame++;
+    SceCtrlData pad; sceCtrlPeekBufferPositive(0, &pad, 1);
+    if (PadDown && PadUp) {
+      unsigned changed = pad.buttons ^ prev_buttons;
+      for (unsigned i = 0; i < sizeof padmap / sizeof padmap[0]; i++)
+        if (changed & padmap[i].vita) (pad.buttons & padmap[i].vita ? PadDown : PadUp)(fake_env, NULL, 0, padmap[i].key, 0,0,0,0);
+      prev_buttons = pad.buttons;
+    }
+    if (PadAxis) {   // Android axes: 0=X 1=Y 11=Z 14=RZ ; value -1..1
+      float ax[4] = { (pad.lx - 128) / 128.0f, (pad.ly - 128) / 128.0f, (pad.rx - 128) / 128.0f, (pad.ry - 128) / 128.0f };
+      static const int axis_id[4] = { 0, 1, 11, 14 };
+      for (int i = 0; i < 4; i++) { if (ax[i] > -0.08f && ax[i] < 0.08f) ax[i] = 0; if (ax[i] != prev_axis[i]) { union { float f; uintptr_t u; } v = { ax[i] }; PadAxis(fake_env, NULL, 0, axis_id[i], v.u, 0,0,0); prev_axis[i] = ax[i]; } }
+    }
     SceTouchData td; sceTouchPeek(SCE_TOUCH_PORT_FRONT, &td, 1);
     if (Touch) {
       if (td.reportNum > 0) { float x = td.report[0].x / 1920.0f * SCREEN_W, y = td.report[0].y / 1088.0f * SCREEN_H;
         Touch(fake_env, NULL, 0, touching ? 2 /*MOVE*/ : 0 /*DOWN*/, x, y); touching = 1; }
       else if (touching) { Touch(fake_env, NULL, 0, 1 /*UP*/, 0, 0); touching = 0; }
     }
-    // TODO(step 4): map SceCtrl buttons → Blast key codes (Android KEYCODE_DPAD_*, BUTTON_A…) via Key/KeyUp once the
-    // game's gamepad path is confirmed; the console-origin code very likely has a full pad path behind it.
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }
     vglSwapBuffers(GL_FALSE);
