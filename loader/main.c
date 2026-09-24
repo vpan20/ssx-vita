@@ -53,8 +53,16 @@ static void *make_trampoline(uintptr_t target) {
   // Use the page-rounding slack at the end of the game's own RX block (memsz 0x166C634, block 0x166D000): ~2.4KB free.
   if (!tramp_pool) tramp_pool = (uint8_t *)(game_mod.text_base + 0x166C640);
   if (tramp_used + 16 > 0x9C0) { debugPrintf("trampoline pool full\n"); return NULL; }
-  uint32_t t[4] = { *(uint32_t *)target, *(uint32_t *)(target + 4), 0xe51ff004, (uint32_t)(target + 8) };
-  uint8_t *at = tramp_pool + tramp_used; tramp_used += 16;
+  uint32_t i0 = *(uint32_t *)target, i1 = *(uint32_t *)(target + 4);
+  uint8_t *at = tramp_pool + tramp_used;
+  if ((i0 & 0x0F7F0000) == 0x051F0000) {            // ldr rX, [pc, #imm]: re-emit as a load from an embedded literal
+    uint32_t imm = i0 & 0xFFF, up = (i0 >> 23) & 1, lit = *(uint32_t *)(target + 8 + (up ? imm : -imm));
+    // w0: ldr rX,[pc,#8] (-> w4)  w1: orig insn1  w2: ldr pc,[pc,#-4] (-> w3)  w3: target+8  w4: literal
+    uint32_t t[5] = { (i0 & 0xFFFFF000) | 0x008 | (1u << 23), i1, 0xe51ff004, (uint32_t)(target + 8), lit };
+    kuKernelCpuUnrestrictedMemcpy(at, t, sizeof t); kuKernelFlushCaches(at, 20); tramp_used += 20; return at;
+  }
+  uint32_t t[4] = { i0, i1, 0xe51ff004, (uint32_t)(target + 8) };
+  tramp_used += 16;
   kuKernelCpuUnrestrictedMemcpy(at, t, sizeof t);
   kuKernelFlushCaches(at, 16);
   return at;
@@ -158,7 +166,30 @@ static void start_watchdog(void) {
   if (t >= 0) sceKernelStartThread(t, 0, NULL);
 }
 
+// ---- loader semaphore handshake trace: translator(0x134) / ack(0x124) / loader(0x19c) at gAlloc (game data +0x17ca390)
+#define GALLOC (game_mod.text_base + 0x17ca390)
+static const char *sem_label(void *s) {
+  uintptr_t a = (uintptr_t)s;
+  return a == GALLOC + 0x134 ? "TRANSLATOR" : a == GALLOC + 0x124 ? "ACK" : a == GALLOC + 0x19c ? "LOADER" : NULL;
+}
+static int (*orig_SemPost)(void *, int); static int (*orig_SemWait)(void *, void *);
+static int hook_SemPost(void *sem, int n) {
+  const char *l = sem_label(sem); int r = orig_SemPost(sem, n);
+  if (l) { static int c; if (c++ < 60) debugPrintf("sem POST %s +%d (thread %x)\n", l, n, sceKernelGetThreadId()); }
+  return r;
+}
+static int hook_SemWait(void *sem, void *tt) {
+  const char *l = sem_label(sem);
+  long long rel = -1;
+  if (l && tt) { struct timespec now; clock_gettime(CLOCK_REALTIME, &now); const struct timespec *d = tt; rel = ((long long)d->tv_sec - now.tv_sec) * 1000 + ((long long)d->tv_nsec - now.tv_nsec) / 1000000; }
+  int r = orig_SemWait(sem, tt);
+  if (l) { static int c; if (c++ < 60) debugPrintf("sem WAIT %s timeout=%lldms -> %d (thread %x)\n", l, rel, r, sceKernelGetThreadId()); }
+  return r;
+}
+
 static void install_hooks(void) {
+  HOOK(0x483318, hook_SemPost, orig_SemPost);
+  HOOK(0x482fe0, hook_SemWait, orig_SemWait);
   HOOK(0x638408, hook_AssetDtor1, orig_AssetDtor1);
   HOOK(0x639180, hook_AssetDtor2, orig_AssetDtor2);
   HOOK(0x63ddf8, hook_TranslateStream, orig_TranslateStream);
@@ -198,6 +229,8 @@ int main(int argc, char *argv[]) {
   // 3. Graphics: VitaGL provides the GLES2 symbols in default_dynlib. Game shaders are GLSL ES → need
   //    VitaGL's runtime translator (vglInitWithCustomThreshold + shark) or precompiled CG. See README §Shaders.
   if (!file_exists("ur0:data/libshacccg.suprx")) fatal("libshacccg.suprx missing — run ShaRKBR33D");
+  vglSetShaderCachePath(DATA_PATH "/shader_cache");   // compiled shaders persist here after the first run
+  sceIoMkdir(DATA_PATH "/shader_cache", 0777);
   debugPrintf("vitaGL init...\n");
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
   debugPrintf("vitaGL ok\n");
