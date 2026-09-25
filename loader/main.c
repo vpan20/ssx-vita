@@ -200,6 +200,15 @@ static int hook_SemWait(void *sem, void *tt) {
   if (l && tt) { struct timespec now; clock_gettime(CLOCK_REALTIME, &now); const struct timespec *d = tt; rel = ((long long)d->tv_sec - now.tv_sec) * 1000 + ((long long)d->tv_nsec - now.tv_nsec) / 1000000; }
   if ((uintptr_t)sem == GALLOC + 0x134) translator_tid = sceKernelGetThreadId();
   int r = orig_SemWait(sem, tt);
+  if ((uintptr_t)sem == GALLOC + 0x134) {
+    // Absorb stale wake-ups: if the queue head is a shader we already translated, keep waiting until real work arrives.
+    for (int guard = 0; guard < 1000 && r >= 0; guard++) {
+      uint32_t *qp = *(uint32_t **)(GALLOC + 0x30); uint32_t *node = qp ? (uint32_t *)*qp : NULL; uint32_t *r6 = node ? (uint32_t *)*node : NULL; void *head = r6 ? (void *)r6[3] : NULL;
+      if (!head || !already_done(head, (const char *)((uint32_t *)head)[6])) break;
+      static int c; if (c++ < 20) debugPrintf("sem WAIT TRANSLATOR: stale wake (head %p done) — waiting again\n", head);
+      r = orig_SemWait(sem, tt);
+    }
+  }
   if (l) { static int c; if (c++ < 60) debugPrintf("sem WAIT %s timeout=%lldms -> %d (thread %x)\n", l, rel, r, sceKernelGetThreadId()); }
   return r;
 }
