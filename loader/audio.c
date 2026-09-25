@@ -91,6 +91,7 @@ void audio_bridge_install(so_module *game) {
   if (s_started) return;
 
   uintptr_t submit = so_symbol(game, "_ZN2EA5Audio4Core21AndroidEAAudioCoreJni11SubmitAudioEiPs");
+  if (!submit) submit = game->text_base + 0x4f0528;   // local symbol (not in dynsym): use its offset from the symtab
   if (!submit) { debugPrintf("audio: SubmitAudio symbol not found — audio disabled\n"); return; }
 
   SceUID th = sceKernelCreateThread("ssx_audio", audio_thread, 0x10000100, 0x10000, 0, 0, NULL);

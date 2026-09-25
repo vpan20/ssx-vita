@@ -70,7 +70,17 @@ int pthread_cond_destroy_bridge(void **slot) {
 int pthread_cond_signal_bridge(void **slot)    { return pthread_cond_signal(cond_get(slot)); }
 int pthread_cond_broadcast_bridge(void **slot) { return pthread_cond_broadcast(cond_get(slot)); }
 int pthread_cond_wait_bridge(void **c, void **m) { return pthread_cond_wait(cond_get(c), mutex_get(m)); }
-int pthread_cond_timedwait_bridge(void **c, void **m, const struct timespec *ts) { return pthread_cond_timedwait(cond_get(c), mutex_get(m), ts); }
+// Deadlines far in the future (the engine's "wait forever") overflow pthread-embedded's 32-bit millisecond
+// conversion and fail instantly. Anything more than an hour out becomes an untimed wait.
+static int deadline_is_far(const struct timespec *ts) {
+  if (!ts) return 1;
+  struct timespec now; clock_gettime(CLOCK_REALTIME, &now);
+  return (long long)ts->tv_sec - now.tv_sec > 3600;
+}
+int pthread_cond_timedwait_bridge(void **c, void **m, const struct timespec *ts) {
+  if (deadline_is_far(ts)) return pthread_cond_wait(cond_get(c), mutex_get(m));
+  return pthread_cond_timedwait(cond_get(c), mutex_get(m), ts);
+}
 
 // ---------- attr (Bionic: 24-byte struct; we use its first word as a pointer to the real attr) ----------
 typedef struct { pthread_attr_t *real; int pad[5]; } bionic_attr;
@@ -171,7 +181,10 @@ int sem_post_bridge(void **slot)    { return sem_post(sem_get(slot)); }
 int sem_wait_bridge(void **slot)    { return sem_wait(sem_get(slot)); }
 int sem_trywait_bridge(void **slot) { return sem_trywait(sem_get(slot)); }
 // timed waits are native: clock_gettime is bridged to the wall clock these compare against (soloader convention)
-int sem_timedwait_bridge(void **slot, const struct timespec *ts) { return sem_timedwait(sem_get(slot), ts); }
+int sem_timedwait_bridge(void **slot, const struct timespec *ts) {
+  if (deadline_is_far(ts)) return sem_wait(sem_get(slot));
+  return sem_timedwait(sem_get(slot), ts);
+}
 int sem_getvalue_bridge(void **slot, int *v) { return sem_getvalue(sem_get(slot), v); }
 
 int sched_yield_bridge(void) { sceKernelDelayThread(100); return 0; }   // a real yield: DelayThread(0) does not let lower-priority threads run
