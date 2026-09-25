@@ -11,6 +11,7 @@
 #define SCE_KERNEL_MEMBLOCK_TYPE_USER_RX (0x0C20D050)   // not in this VitaSDK's headers; same value so_util.c uses
 #endif
 #include "jni_patch.h"
+#include "audio.h"
 #include "stubs.h"
 
 #define SCREEN_W 960
@@ -245,6 +246,7 @@ int main(int argc, char *argv[]) {
   fn_JNI_OnLoad JNI_OnLoad = (fn_JNI_OnLoad)so_symbol(&game_mod, "JNI_OnLoad");
   if (!JNI_OnLoad) fatal("missing JNI_OnLoad");
   JNI_OnLoad(fake_vm, NULL);           debugPrintf("JNI_OnLoad ok\n");
+  audio_bridge_install(&game_mod);     // SubmitAudio -> SceAudioOut ring (replaces the AudioTrack JNI path)
 
   uintptr_t sInternal = (uintptr_t)jni_new_string(DATA_PATH "/internal");
   uintptr_t sExternal = (uintptr_t)jni_new_string(DATA_PATH "/external");
@@ -266,7 +268,12 @@ int main(int argc, char *argv[]) {
   CALL("Java_com_ea_blast_MainThread_NativeOnSurfaceCreated", 1,0,0,0,0,0);
   CALL("Java_com_ea_blast_MainThread_NativeOnSurfaceChanged", SCREEN_W, SCREEN_H, 0,0,0,0);
   fn_jni DrawFrame = J("Java_com_ea_blast_MainThread_NativeOnDrawFrame");
-  fn_env_iiff Touch = (fn_env_iiff)so_symbol(&game_mod, "Java_com_ea_blast_TouchSurfaceAndroid_NativeOnPointerEvent");
+  fn_jni Touch = J("Java_com_ea_blast_TouchSurfaceAndroid_NativeOnPointerEvent");
+  // Decoded from TouchScreen::HandleMessage: (action, tag=1000 raw pointer, pointerId, x as float bits, y as float bits)
+  #define TOUCH_DOWN 0x6000E
+  #define TOUCH_MOVE 0x4000E
+  #define TOUCH_UP   0x8000E
+  #define FBITS(f) ({ union { float v; uintptr_t u; } _c = { (f) }; _c.u; })
   debugPrintf("boot chain complete — entering frame loop\n");
 
   // 5. Frame loop. Android calls NativeOnDrawFrame from GLSurfaceView; we do the same and swap ourselves.
@@ -303,9 +310,10 @@ int main(int argc, char *argv[]) {
     }
     SceTouchData td; sceTouchPeek(SCE_TOUCH_PORT_FRONT, &td, 1);
     if (Touch) {
+      static float lx, ly;
       if (td.reportNum > 0) { float x = td.report[0].x / 1920.0f * SCREEN_W, y = td.report[0].y / 1088.0f * SCREEN_H;
-        Touch(fake_env, NULL, 0, touching ? 2 /*MOVE*/ : 0 /*DOWN*/, x, y); touching = 1; }
-      else if (touching) { Touch(fake_env, NULL, 0, 1 /*UP*/, 0, 0); touching = 0; }
+        Touch(fake_env, NULL, touching ? TOUCH_MOVE : TOUCH_DOWN, 1000, 0, FBITS(x), FBITS(y), 0); touching = 1; lx = x; ly = y; }
+      else if (touching) { Touch(fake_env, NULL, TOUCH_UP, 1000, 0, FBITS(lx), FBITS(ly), 0); touching = 0; }
     }
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }

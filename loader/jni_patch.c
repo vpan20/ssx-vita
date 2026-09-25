@@ -179,7 +179,10 @@ static jni_method methods[] = {
   { "eglSwapBuffers",       (uintptr_t)egl_ok }, { "eglDestroySurface",(uintptr_t)egl_ok },
   { "eglDestroyContext",    (uintptr_t)egl_ok }, { "eglTerminate",     (uintptr_t)egl_ok },
   { "eglQuerySurface",      (uintptr_t)egl_ok }, { "eglGetError",      (uintptr_t)ret0 },
+  { "eglQueryContext",      (uintptr_t)egl_ok },
   { "eglQueryString",       (uintptr_t)lang },
+  // Confirmed looked-up via GetMethodID in libgame.so (name+sig adjacency), not yet in table:
+  { "exitApp",              (uintptr_t)retv }, { "openURL",           (uintptr_t)retv },
   // com/ea/EAMIO/StorageDirectory
   { "GetExternalStorageDirectory",(uintptr_t)storage_ext },{ "GetInternalStorageDirectory",(uintptr_t)storage_int },
   { "GetObbDirectory",      (uintptr_t)storage_obb },{ "GetCacheDirectory",(uintptr_t)storage_int },
