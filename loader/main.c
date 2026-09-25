@@ -174,8 +174,21 @@ static const char *sem_label(void *s) {
   return a == GALLOC + 0x134 ? "TRANSLATOR" : a == GALLOC + 0x124 ? "ACK" : a == GALLOC + 0x19c ? "LOADER" : NULL;
 }
 static int (*orig_SemPost)(void *, int); static int (*orig_SemWait)(void *, void *);
+static SceUID translator_tid;
 static int hook_SemPost(void *sem, int n) {
-  const char *l = sem_label(sem); int r = orig_SemPost(sem, n);
+  const char *l = sem_label(sem);
+  // The translator thread re-posts its own semaphore after each job to look for more. If the queue head is the
+  // asset it just finished (nothing popped it yet), that self-post only makes it re-translate the same shader and
+  // starve the main thread of the "translated" state. Swallow it; the Unpack thread posts again for new work.
+  if ((uintptr_t)sem == GALLOC + 0x134 && sceKernelGetThreadId() == translator_tid) {
+    // peek at the queue head exactly as TranslatorUpdate does: head = **(gAlloc+0x30); asset = head[3]
+    uint32_t *qp = *(uint32_t **)(GALLOC + 0x30); uint32_t *node = qp ? (uint32_t *)*qp : NULL; void *head = node ? (void *)node[3] : NULL;
+    if (head && already_done(head, (const char *)((uint32_t *)head)[6])) {
+      static int c; if (c++ < 20) debugPrintf("sem POST TRANSLATOR (self) swallowed — head %p already translated\n", head);
+      return 0;
+    }
+  }
+  int r = orig_SemPost(sem, n);
   if (l) { static int c; if (c++ < 60) debugPrintf("sem POST %s +%d (thread %x)\n", l, n, sceKernelGetThreadId()); }
   return r;
 }
@@ -183,6 +196,7 @@ static int hook_SemWait(void *sem, void *tt) {
   const char *l = sem_label(sem);
   long long rel = -1;
   if (l && tt) { struct timespec now; clock_gettime(CLOCK_REALTIME, &now); const struct timespec *d = tt; rel = ((long long)d->tv_sec - now.tv_sec) * 1000 + ((long long)d->tv_nsec - now.tv_nsec) / 1000000; }
+  if ((uintptr_t)sem == GALLOC + 0x134) translator_tid = sceKernelGetThreadId();
   int r = orig_SemWait(sem, tt);
   if (l) { static int c; if (c++ < 60) debugPrintf("sem WAIT %s timeout=%lldms -> %d (thread %x)\n", l, rel, r, sceKernelGetThreadId()); }
   return r;
