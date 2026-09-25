@@ -19,7 +19,7 @@ jobs:
           git clone --depth 1 https://github.com/Rinnegatamante/vitaShaRK && make -C vitaShaRK install
           git clone --depth 1 https://github.com/Rinnegatamante/math-neon && make -C math-neon install
           # vitaGL from source: soft-float ABI, GLSL shader cache (compile once, load compiled binaries after), pthread-safe
-          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL && make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 HAVE_PTHREAD=1 NO_DEBUG=1 install
+          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL && make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 install
       - name: Build
         run: |
           export PATH=$VITASDK/bin:$PATH
