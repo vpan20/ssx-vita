@@ -182,7 +182,9 @@ static int hook_SemPost(void *sem, int n) {
   // starve the main thread of the "translated" state. Swallow it; the Unpack thread posts again for new work.
   if ((uintptr_t)sem == GALLOC + 0x134 && sceKernelGetThreadId() == translator_tid) {
     // peek at the queue head exactly as TranslatorUpdate does: head = **(gAlloc+0x30); asset = head[3]
-    uint32_t *qp = *(uint32_t **)(GALLOC + 0x30); uint32_t *node = qp ? (uint32_t *)*qp : NULL; void *head = node ? (void *)node[3] : NULL;
+    // chain from TranslatorUpdate: r1=[gAlloc+0x30]; r1=[r1]; r6=[r1]; asset=[r6+0xc]
+    uint32_t *qp = *(uint32_t **)(GALLOC + 0x30); uint32_t *node = qp ? (uint32_t *)*qp : NULL; uint32_t *r6 = node ? (uint32_t *)*node : NULL; void *head = r6 ? (void *)r6[3] : NULL;
+    { static int c; if (c++ < 12) debugPrintf("translator self-post: head=%p done=%d\n", head, head ? already_done(head, (const char *)((uint32_t *)head)[6]) : -1); }
     if (head && already_done(head, (const char *)((uint32_t *)head)[6])) {
       static int c; if (c++ < 20) debugPrintf("sem POST TRANSLATOR (self) swallowed — head %p already translated\n", head);
       return 0;
