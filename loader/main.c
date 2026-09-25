@@ -91,10 +91,15 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
   if (asset && *(uint32_t *)asset) {
     const char *nm = (const char *)((uint32_t *)asset)[6];
     if (already_done(asset, nm)) {
-      // Duplicate wake for the same queue head. TranslateStream must still run (it releases the loader lock on exit),
-      // so let it; just add one reference (bits 2..31 of word +0x20) so the follow-up Release cannot free the asset.
+      // Repeated pass over an already-translated asset (the queue drains one node per pass). Its chunk data was
+      // released after the first success, so it must NOT be parsed again: hand the original a zero-length stream
+      // (it fails fast at "size == 0" and still releases the loader lock on exit), keep the asset alive with an
+      // extra reference, and report state 4 so the game still sees it as translated.
       uint32_t *rc = &((uint32_t *)asset)[8]; *rc += 4;
-      static int n; if (n++ < 10) debugPrintf("TranslateStream: duplicate for %s — re-running with extra ref (refs now %u)\n", nm ? nm : "?", (*rc) >> 2);
+      uint32_t *sw = stream; if (sw) sw[4] = 0;
+      static int n; if (n++ < 10) debugPrintf("TranslateStream: repeat pass for %s — skipped parse, reporting translated\n", nm ? nm : "?");
+      orig_TranslateStream(parent, asset, stream, flag);
+      return 4;
     }
   }
   if (!asset || !*(uint32_t *)asset) {
@@ -180,16 +185,6 @@ static int hook_SemPost(void *sem, int n) {
   // The translator thread re-posts its own semaphore after each job to look for more. If the queue head is the
   // asset it just finished (nothing popped it yet), that self-post only makes it re-translate the same shader and
   // starve the main thread of the "translated" state. Swallow it; the Unpack thread posts again for new work.
-  if ((uintptr_t)sem == GALLOC + 0x134 && sceKernelGetThreadId() == translator_tid) {
-    // peek at the queue head exactly as TranslatorUpdate does: head = **(gAlloc+0x30); asset = head[3]
-    // chain from TranslatorUpdate: r1=[gAlloc+0x30]; r1=[r1]; r6=[r1]; asset=[r6+0xc]
-    uint32_t *qp = *(uint32_t **)(GALLOC + 0x30); uint32_t *node = qp ? (uint32_t *)*qp : NULL; uint32_t *r6 = node ? (uint32_t *)*node : NULL; void *head = r6 ? (void *)r6[3] : NULL;
-    { static int c; if (c++ < 12) debugPrintf("translator self-post: head=%p done=%d\n", head, head ? already_done(head, (const char *)((uint32_t *)head)[6]) : -1); }
-    if (head && already_done(head, (const char *)((uint32_t *)head)[6])) {
-      static int c; if (c++ < 20) debugPrintf("sem POST TRANSLATOR (self) swallowed — head %p already translated\n", head);
-      return 0;
-    }
-  }
   int r = orig_SemPost(sem, n);
   if (l) { static int c; if (c++ < 60) debugPrintf("sem POST %s +%d (thread %x)\n", l, n, sceKernelGetThreadId()); }
   return r;
@@ -200,15 +195,6 @@ static int hook_SemWait(void *sem, void *tt) {
   if (l && tt) { struct timespec now; clock_gettime(CLOCK_REALTIME, &now); const struct timespec *d = tt; rel = ((long long)d->tv_sec - now.tv_sec) * 1000 + ((long long)d->tv_nsec - now.tv_nsec) / 1000000; }
   if ((uintptr_t)sem == GALLOC + 0x134) translator_tid = sceKernelGetThreadId();
   int r = orig_SemWait(sem, tt);
-  if ((uintptr_t)sem == GALLOC + 0x134) {
-    // Absorb stale wake-ups: if the queue head is a shader we already translated, keep waiting until real work arrives.
-    for (int guard = 0; guard < 1000; guard++) {
-      uint32_t *qp = *(uint32_t **)(GALLOC + 0x30); uint32_t *node = qp ? (uint32_t *)*qp : NULL; uint32_t *r6 = node ? (uint32_t *)*node : NULL; void *head = r6 ? (void *)r6[3] : NULL;
-      if (!head || !already_done(head, (const char *)((uint32_t *)head)[6])) break;
-      static int c; if (c++ < 20) debugPrintf("sem WAIT TRANSLATOR: stale wake (head %p done) — waiting again\n", head);
-      r = orig_SemWait(sem, tt);
-    }
-  }
   if (l) { static int c; if (c++ < 60) debugPrintf("sem WAIT %s timeout=%lldms -> %d (thread %x)\n", l, rel, r, sceKernelGetThreadId()); }
   return r;
 }
