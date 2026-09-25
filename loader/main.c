@@ -195,6 +195,21 @@ static int hook_SemWait(void *sem, void *tt) {
   if (l && tt) { struct timespec now; clock_gettime(CLOCK_REALTIME, &now); const struct timespec *d = tt; rel = ((long long)d->tv_sec - now.tv_sec) * 1000 + ((long long)d->tv_nsec - now.tv_nsec) / 1000000; }
   if ((uintptr_t)sem == GALLOC + 0x134) translator_tid = sceKernelGetThreadId();
   int r = orig_SemWait(sem, tt);
+  if ((uintptr_t)sem == GALLOC + 0x134) {   // translator woke: dump the loader's request vectors
+    static int c;
+    if (c++ < 24) {
+      char line[300] = "vectors:";
+      const unsigned offs[4] = { 0x2c, 0x30, 0x118, 0x11c };
+      for (int i = 0; i < 4; i++) {
+        uint32_t *v = *(uint32_t **)(GALLOC + offs[i]); char b[80];
+        if (!v) { snprintf(b, sizeof b, " [+%X null]", offs[i]); }
+        else { uint32_t *bg = (uint32_t *)v[0], *en = (uint32_t *)v[1]; int n = (int)(en - bg);
+          snprintf(b, sizeof b, " [+%X n=%d e0=%p]", offs[i], n, n > 0 ? (void *)bg[0] : NULL); }
+        strncat(line, b, sizeof line - strlen(line) - 1);
+      }
+      debugPrintf("%s\n", line);
+    }
+  }
   if (l) { static int c; if (c++ < 60) debugPrintf("sem WAIT %s timeout=%lldms -> %d (thread %x)\n", l, rel, r, sceKernelGetThreadId()); }
   return r;
 }
