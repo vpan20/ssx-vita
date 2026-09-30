@@ -14,7 +14,7 @@
 #include "stubs.h"
 
 #define IS_UNINIT(v) ((uintptr_t)(v) < 0x10000)
-#define DEFAULT_STACK (512 * 1024)
+#define DEFAULT_STACK (2 * 1024 * 1024)   // ChunkStream::Read recurses per chunk; 512KB overflowed on a 77KB font
 #define MAX_STACK     (4 * 1024 * 1024)
 
 static pthread_mutex_t bridge_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -100,7 +100,8 @@ int pthread_attr_destroy_bridge(bionic_attr *a) {
 }
 int pthread_attr_setdetachstate_bridge(bionic_attr *a, int s) { return pthread_attr_setdetachstate(attr_get(a), s ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE); }
 int pthread_attr_setstacksize_bridge(bionic_attr *a, size_t n) {
-  if (n < 64 * 1024) n = 64 * 1024; if (n > MAX_STACK) n = MAX_STACK;
+  debugPrintf("thread attr stacksize=%u\n", (unsigned)n);
+  if (n < DEFAULT_STACK) n = DEFAULT_STACK; if (n > MAX_STACK) n = MAX_STACK;
   return pthread_attr_setstacksize(attr_get(a), n);
 }
 int pthread_attr_setstack_bridge(bionic_attr *a, void *base, size_t n) { return pthread_attr_setstacksize_bridge(a, n); } // ignore caller-supplied stack memory
