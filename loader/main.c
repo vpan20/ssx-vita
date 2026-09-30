@@ -196,7 +196,7 @@ static int hook_SemPost(void *sem, int n) {
   // asset it just finished (nothing popped it yet), that self-post only makes it re-translate the same shader and
   // starve the main thread of the "translated" state. Swallow it; the Unpack thread posts again for new work.
   int r = orig_SemPost(sem, n);
-  if (l) { static int c; if (c++ < 60) debugPrintf("sem POST %s +%d (thread %x)\n", l, n, sceKernelGetThreadId()); }
+  if (l) { static int c; if (c++ < 400) debugPrintf("sem POST %s +%d (thread %x)\n", l, n, sceKernelGetThreadId()); }
   return r;
 }
 static int hook_SemWait(void *sem, void *tt) {
@@ -215,11 +215,13 @@ static int hook_SemWait(void *sem, void *tt) {
       uint32_t *lb = (uint32_t *)tl[0], *le = (uint32_t *)tl[1]; int n11c = (int)(le - lb);
       uint32_t *next = n11c > 0 ? (uint32_t *)lb[0] : NULL;
       if (next && *next && !already_done(next, (const char *)next[6])) {
-        uint32_t *rec = (uint32_t *)next[12];   // asset+0x30
-        int rec_ok = rec && (uintptr_t)rec > 0x80000000 && (void *)rec[3] == (void *)next;
+        uint32_t *rec = NULL;
+        { uint32_t *uv = *(uint32_t **)(GALLOC + 0x2c); if (uv) { uint32_t *ub = (uint32_t *)uv[0]; if (ub && ub[0] && ((uint32_t *)ub[0])[3] == (uint32_t)next) rec = (uint32_t *)ub[0]; } }
+        if (!rec && (uintptr_t)next[12] > 0x80000000 && ((uint32_t *)next[12])[3] == (uint32_t)next) rec = (uint32_t *)next[12];
+        int rec_ok = rec != NULL;
         uint32_t *cur = n30 > 0 ? (uint32_t *)tb[0] : NULL;
         int cur_done = !cur || !cur[3] || already_done((void *)cur[3], (const char *)((uint32_t *)cur[3])[6]);
-        static int c; if (c++ < 20) debugPrintf("mailbox: n30=%d cur=%p(done=%d) next=%p rec=%p(ok=%d)\n", n30, cur, cur_done, next, rec, rec_ok);
+        static int c; if (c++ < 200) debugPrintf("mailbox: n30=%d cur=%p(done=%d) next=%p rec=%p(ok=%d)\n", n30, cur, cur_done, next, rec, rec_ok);
         if (rec_ok && cur_done) {
           if (n30 == 0) { tb[0] = (uint32_t)rec; tv[1] = (uint32_t)(tb + 1); } else tb[0] = (uint32_t)rec;
           debugPrintf("mailbox: installed record for %s\n", (const char *)next[6]);
@@ -228,7 +230,7 @@ static int hook_SemWait(void *sem, void *tt) {
     }
     // dump the loader's request vectors
     static int c;
-    if (c++ < 24) {
+    if (c++ < 200) {
       char line[300] = "vectors:";
       const unsigned offs[4] = { 0x2c, 0x30, 0x118, 0x11c };
       for (int i = 0; i < 4; i++) {
@@ -241,11 +243,36 @@ static int hook_SemWait(void *sem, void *tt) {
       debugPrintf("%s\n", line);
     }
   }
-  if (l) { static int c; if (c++ < 60) debugPrintf("sem WAIT %s timeout=%lldms -> %d (thread %x)\n", l, rel, r, sceKernelGetThreadId()); }
+  if (l) { static int c; if (c++ < 400) debugPrintf("sem WAIT %s timeout=%lldms -> %d (thread %x)\n", l, rel, r, sceKernelGetThreadId()); }
   return r;
 }
 
+// ---- producer-stage tracing: LoadingUpdate / UnpackUpdate entry and exit with mailbox states ----
+static void mailbox_state(char *out, size_t n) {
+  const unsigned offs[4] = { 0x2c, 0x30, 0x118, 0x11c }; out[0] = 0;
+  for (int i = 0; i < 4; i++) {
+    uint32_t *v = *(uint32_t **)(GALLOC + offs[i]); char b[64];
+    if (!v) snprintf(b, sizeof b, " [+%X null]", offs[i]);
+    else { uint32_t *bg = (uint32_t *)v[0], *en = (uint32_t *)v[1]; int cnt = (int)(en - bg); snprintf(b, sizeof b, " [+%X n=%d e0=%p]", offs[i], cnt, bg ? (void *)bg[0] : NULL); }
+    strncat(out, b, n - strlen(out) - 1);
+  }
+}
+static void (*orig_LoadingUpdate)(void); static void (*orig_UnpackUpdate)(void);
+static int stage_log;
+static void hook_LoadingUpdate(void) {
+  char s[300]; if (stage_log < 200) { mailbox_state(s, sizeof s); debugPrintf("LoadingUpdate in %s\n", s); }
+  orig_LoadingUpdate();
+  if (stage_log++ < 200) { mailbox_state(s, sizeof s); debugPrintf("LoadingUpdate out%s\n", s); }
+}
+static void hook_UnpackUpdate(void) {
+  char s[300]; if (stage_log < 200) { mailbox_state(s, sizeof s); debugPrintf("UnpackUpdate in %s\n", s); }
+  orig_UnpackUpdate();
+  if (stage_log++ < 200) { mailbox_state(s, sizeof s); debugPrintf("UnpackUpdate out%s\n", s); }
+}
+
 static void install_hooks(void) {
+  HOOK(0x6438c0, hook_LoadingUpdate, orig_LoadingUpdate);
+  HOOK(0x642b78, hook_UnpackUpdate, orig_UnpackUpdate);
   HOOK(0x483318, hook_SemPost, orig_SemPost);
   HOOK(0x482fe0, hook_SemWait, orig_SemWait);
   HOOK(0x638408, hook_AssetDtor1, orig_AssetDtor1);
