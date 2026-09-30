@@ -205,7 +205,28 @@ static int hook_SemWait(void *sem, void *tt) {
   if (l && tt) { struct timespec now; clock_gettime(CLOCK_REALTIME, &now); const struct timespec *d = tt; rel = ((long long)d->tv_sec - now.tv_sec) * 1000 + ((long long)d->tv_nsec - now.tv_nsec) / 1000000; }
   if ((uintptr_t)sem == GALLOC + 0x134) translator_tid = sceKernelGetThreadId();
   int r = orig_SemWait(sem, tt);
-  if ((uintptr_t)sem == GALLOC + 0x134) {   // translator woke: dump the loader's request vectors
+  if ((uintptr_t)sem == GALLOC + 0x134) {
+    // Mailbox fix-up. +0x30 is a single-slot mailbox that nothing pops and the translator reads even when empty.
+    // The asset to translate next is +0x11c[0]; its request record is at asset+0x30 (set by the Asset constructor).
+    // If the mailbox is empty or holds an already-translated asset, install the next asset's record.
+    uint32_t *tv = *(uint32_t **)(GALLOC + 0x30), *tl = *(uint32_t **)(GALLOC + 0x11c);
+    if (tv && tl) {
+      uint32_t *tb = (uint32_t *)tv[0], *te = (uint32_t *)tv[1]; int n30 = (int)(te - tb);
+      uint32_t *lb = (uint32_t *)tl[0], *le = (uint32_t *)tl[1]; int n11c = (int)(le - lb);
+      uint32_t *next = n11c > 0 ? (uint32_t *)lb[0] : NULL;
+      if (next && *next && !already_done(next, (const char *)next[6])) {
+        uint32_t *rec = (uint32_t *)next[12];   // asset+0x30
+        int rec_ok = rec && (uintptr_t)rec > 0x80000000 && (void *)rec[3] == (void *)next;
+        uint32_t *cur = n30 > 0 ? (uint32_t *)tb[0] : NULL;
+        int cur_done = !cur || !cur[3] || already_done((void *)cur[3], (const char *)((uint32_t *)cur[3])[6]);
+        static int c; if (c++ < 20) debugPrintf("mailbox: n30=%d cur=%p(done=%d) next=%p rec=%p(ok=%d)\n", n30, cur, cur_done, next, rec, rec_ok);
+        if (rec_ok && cur_done) {
+          if (n30 == 0) { tb[0] = (uint32_t)rec; tv[1] = (uint32_t)(tb + 1); } else tb[0] = (uint32_t)rec;
+          debugPrintf("mailbox: installed record for %s\n", (const char *)next[6]);
+        }
+      }
+    }
+    // dump the loader's request vectors
     static int c;
     if (c++ < 24) {
       char line[300] = "vectors:";
