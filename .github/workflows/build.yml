@@ -23,7 +23,7 @@ jobs:
       - name: Build
         run: |
           export PATH=$VITASDK/bin:$PATH
-          mkdir -p build && cd build && cmake .. && make
+          mkdir -p build && cd build && cmake -DBUILD_ID=${GITHUB_SHA::7} .. && make
       - name: Upload VPK
         uses: actions/upload-artifact@v4
         with:
