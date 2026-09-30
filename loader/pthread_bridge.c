@@ -167,25 +167,34 @@ int pthread_key_delete_bridge(pthread_key_t k) { return pthread_key_delete(k); }
 void *pthread_getspecific_bridge(pthread_key_t k) { return pthread_getspecific(k); }
 int pthread_setspecific_bridge(pthread_key_t k, const void *v) { return pthread_setspecific(k, v); }
 
-// ---------- semaphores (Bionic sem_t is 4 bytes) ----------
-static sem_t *sem_get(void **slot) {
-  if (!IS_UNINIT(*slot)) return (sem_t *)*slot;
+// ---------- semaphores: raw kernel semaphores (Electry/NFSHP convention) ----------
+// Bionic sem_t is 4 bytes: the slot holds the SceUID. A slot below 0x10000 is an initial count for a semaphore the
+// game initialised statically. Timeouts are computed here from the same clock the game reads (CLOCK_REALTIME), in
+// microseconds, and anything beyond an hour is treated as "forever" — no 32-bit millisecond truncation, no pthread ledger.
+static SceUID ksem_get(int *slot) {
+  if ((unsigned)*slot >= 0x10000) return (SceUID)*slot;
   pthread_mutex_lock(&bridge_lock);
-  if (IS_UNINIT(*slot)) { sem_t *s = calloc(1, sizeof(sem_t)); sem_init(s, 0, (unsigned)(uintptr_t)*slot); *slot = s; }
+  if ((unsigned)*slot < 0x10000) { int init = *slot; SceUID id = sceKernelCreateSema("bsem", 0, init, 0x7fffffff, NULL); if (id >= 0) *slot = (int)id; else debugPrintf("sceKernelCreateSema failed 0x%08X\n", id); }
   pthread_mutex_unlock(&bridge_lock);
-  return (sem_t *)*slot;
+  return (SceUID)*slot;
 }
-int sem_init_bridge(void **slot, int pshared, unsigned value) { *slot = (void *)(uintptr_t)value; sem_get(slot); return 0; }
-int sem_destroy_bridge(void **slot) { if (!IS_UNINIT(*slot)) { sem_destroy((sem_t *)*slot); free(*slot); *slot = NULL; } return 0; }
-int sem_post_bridge(void **slot)    { return sem_post(sem_get(slot)); }
-int sem_wait_bridge(void **slot)    { return sem_wait(sem_get(slot)); }
-int sem_trywait_bridge(void **slot) { return sem_trywait(sem_get(slot)); }
-// timed waits are native: clock_gettime is bridged to the wall clock these compare against (soloader convention)
-int sem_timedwait_bridge(void **slot, const struct timespec *ts) {
-  if (deadline_is_far(ts)) return sem_wait(sem_get(slot));
-  return sem_timedwait(sem_get(slot), ts);
+int sem_init_bridge(int *slot, int pshared, unsigned value) { *slot = (int)value; ksem_get(slot); return 0; }
+int sem_destroy_bridge(int *slot) { if ((unsigned)*slot >= 0x10000) { sceKernelDeleteSema((SceUID)*slot); *slot = 0; } return 0; }
+int sem_post_bridge(int *slot)    { return sceKernelSignalSema(ksem_get(slot), 1) < 0 ? -1 : 0; }
+int sem_wait_bridge(int *slot)    { return sceKernelWaitSema(ksem_get(slot), 1, NULL) < 0 ? -1 : 0; }
+int sem_trywait_bridge(int *slot) { SceUInt t = 0; if (sceKernelWaitSema(ksem_get(slot), 1, &t) < 0) { errno = EAGAIN; return -1; } return 0; }
+int sem_timedwait_bridge(int *slot, const struct timespec *ts) {
+  SceUID id = ksem_get(slot);
+  if (!ts) return sceKernelWaitSema(id, 1, NULL) < 0 ? -1 : 0;
+  struct timespec now; clock_gettime(CLOCK_REALTIME, &now);
+  long long us = ((long long)ts->tv_sec - now.tv_sec) * 1000000LL + ((long long)ts->tv_nsec - now.tv_nsec) / 1000;
+  if (us > 3600LL * 1000000LL) return sceKernelWaitSema(id, 1, NULL) < 0 ? -1 : 0;   // "forever"
+  if (us < 0) us = 0;
+  SceUInt t = (SceUInt)us;
+  if (sceKernelWaitSema(id, 1, &t) < 0) { errno = ETIMEDOUT; return -1; }
+  return 0;
 }
-int sem_getvalue_bridge(void **slot, int *v) { return sem_getvalue(sem_get(slot), v); }
+int sem_getvalue_bridge(int *slot, int *v) { SceKernelSemaInfo i = { .size = sizeof i }; if (sceKernelGetSemaInfo(ksem_get(slot), &i) < 0) return -1; *v = i.numWaitThreads > 0 ? -i.numWaitThreads : i.currentCount; return 0; }
 
 int sched_yield_bridge(void) { sceKernelDelayThread(100); return 0; }   // a real yield: DelayThread(0) does not let lower-priority threads run
 

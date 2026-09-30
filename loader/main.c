@@ -27,6 +27,7 @@ unsigned int sceUserMainThreadStackSize = 1 * 1024 * 1024;
 extern so_default_dynlib default_dynlib[]; extern int default_dynlib_size;
 
 static so_module game_mod, gnustl_mod;
+#define GALLOC (game_mod.text_base + 0x17ca390)   // AssetStream::gAlloc
 
 // ---- JNI entry points exported by libgame.so (resolved after load) ----
 typedef int  (*fn_JNI_OnLoad)(void *vm, void *reserved);
@@ -87,6 +88,15 @@ static void hook_AssetRelease(void *asset, int b, int state) {
   { static int n; if (n++ < 12) debugPrintf("Release(%p, %d, %d) refs=%u from game+0x%X\n", asset, b, state, (((uint32_t *)asset)[8]) >> 2, (unsigned)((uintptr_t)__builtin_return_address(0) - game_mod.text_base)); }
   orig_AssetRelease(asset, b, state);
 }
+// Remove `asset` from the front of the translate vector (*(gAlloc+0x30)). No code in the binary ever pops this vector;
+// the translator re-reads element 0 forever. Called with the loader lock held (TranslateStream's contract).
+static void translate_vector_pop(void *asset) {
+  uint32_t *vec = *(uint32_t **)(GALLOC + 0x30); if (!vec) return;
+  uint32_t *begin = (uint32_t *)vec[0], *end = (uint32_t *)vec[1]; if (end <= begin) return;
+  uint32_t *node = (uint32_t *)begin[0]; if (!node || (void *)node[3] != asset) return;
+  memmove(begin, begin + 1, (end - begin - 1) * sizeof(uint32_t)); vec[1] = (uint32_t)(end - 1);
+  static int c; if (c++ < 30) debugPrintf("translate vector: popped %p (%d left)\n", asset, (int)(end - begin - 1));
+}
 static int hook_TranslateStream(void *parent, void *asset, void *stream, int flag) {
   if (asset && *(uint32_t *)asset) {
     const char *nm = (const char *)((uint32_t *)asset)[6];
@@ -112,6 +122,7 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
     uint32_t *w = asset; const char *nm = (const char *)w[6]; uint32_t *sw = stream;
     static int n; if (n++ < 30) debugPrintf("TranslateStream: %s asset=%p size=%u/%u streamsize=%u flag=%d\n", nm ? nm : "?", asset, w[2], w[3], sw ? sw[4] : 0, flag);
   }
+  translate_vector_pop(asset);
   int r = orig_TranslateStream(parent, asset, stream, flag);
   { static int n2; if (n2++ < 30) debugPrintf("  -> %d\n", r); }
   if (r == 4) { done[done_i].asset = asset; done[done_i].name = (const char *)((uint32_t *)asset)[6]; done_i = (done_i + 1) % DONE_N; }
@@ -173,7 +184,6 @@ static void start_watchdog(void) {
 }
 
 // ---- loader semaphore handshake trace: translator(0x134) / ack(0x124) / loader(0x19c) at gAlloc (game data +0x17ca390)
-#define GALLOC (game_mod.text_base + 0x17ca390)
 static const char *sem_label(void *s) {
   uintptr_t a = (uintptr_t)s;
   return a == GALLOC + 0x134 ? "TRANSLATOR" : a == GALLOC + 0x124 ? "ACK" : a == GALLOC + 0x19c ? "LOADER" : NULL;
@@ -231,7 +241,10 @@ int main(int argc, char *argv[]) {
   sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
   sceIoMkdir(DATA_PATH, 0777); sceIoMkdir(DATA_PATH "/internal", 0777); sceIoMkdir(DATA_PATH "/obb", 0777);
   sceIoRemove(DATA_PATH "/ssx.log");
-  debugPrintf("=== SSX Vita boot ===\n");
+#ifndef BUILD_ID
+#define BUILD_ID "dev"
+#endif
+  debugPrintf("=== SSX Vita boot (build " BUILD_ID ") ===\n");
 
   if (!file_exists(DATA_PATH "/lib/libgame.so"))  fatal("Missing " DATA_PATH "/lib/libgame.so");
   if (!file_exists(DATA_PATH "/lib/libgnustl_shared.so")) fatal("Missing " DATA_PATH "/lib/libgnustl_shared.so");
