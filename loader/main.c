@@ -88,18 +88,9 @@ static void hook_AssetRelease(void *asset, int b, int state) {
   { static int n; if (n++ < 12) debugPrintf("Release(%p, %d, %d) refs=%u from game+0x%X\n", asset, b, state, (((uint32_t *)asset)[8]) >> 2, (unsigned)((uintptr_t)__builtin_return_address(0) - game_mod.text_base)); }
   orig_AssetRelease(asset, b, state);
 }
-// Remove `asset` from the front of the translate vector (*(gAlloc+0x30)). No code in the binary ever pops this vector;
-// the translator re-reads element 0 forever. Called with the loader lock held (TranslateStream's contract).
-static void translate_vector_pop(void *asset) {
-  uint32_t *vec = *(uint32_t **)(GALLOC + 0x30); if (!vec) return;
-  uint32_t *begin = (uint32_t *)vec[0], *end = (uint32_t *)vec[1]; if (end <= begin) return;
-  uint32_t *node = (uint32_t *)begin[0]; if (!node || (void *)node[3] != asset) return;
-  memmove(begin, begin + 1, (end - begin - 1) * sizeof(uint32_t)); vec[1] = (uint32_t)(end - 1);
-  static int c; if (c++ < 30) debugPrintf("translate vector: popped %p (%d left)\n", asset, (int)(end - begin - 1));
-}
 static int hook_TranslateStream(void *parent, void *asset, void *stream, int flag) {
+  const char *nm = (asset && *(uint32_t *)asset) ? (const char *)((uint32_t *)asset)[6] : NULL;
   if (asset && *(uint32_t *)asset) {
-    const char *nm = (const char *)((uint32_t *)asset)[6];
     if (already_done(asset, nm)) {
       // Repeated pass over an already-translated asset (the queue drains one node per pass). Its chunk data was
       // released after the first success, so it must NOT be parsed again: hand the original a zero-length stream
@@ -122,7 +113,17 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
     uint32_t *w = asset; const char *nm = (const char *)w[6]; uint32_t *sw = stream;
     static int n; if (n++ < 30) debugPrintf("TranslateStream: %s asset=%p size=%u/%u streamsize=%u flag=%d\n", nm ? nm : "?", asset, w[2], w[3], sw ? sw[4] : 0, flag);
   }
-  translate_vector_pop(asset);
+  // The engine's contract: a chunk reaches the translator only when fully filled. If the loader thread is still
+  // filling it (filled < total), wait here rather than let ChunkStream::Read run dry and recurse.
+  {
+    uint32_t *vec = *(uint32_t **)(GALLOC + 0x30); uint32_t *chunk = NULL;
+    if (vec) { uint32_t *b = (uint32_t *)vec[0], *e = (uint32_t *)vec[1]; for (uint32_t *p = b; p < e; p++) { uint32_t *c = (uint32_t *)*p; if (c && (void *)c[3] == asset) { chunk = c; break; } } }
+    if (chunk) {
+      int waited = 0;
+      while (chunk[5] < chunk[6] && waited < 20000) { sceKernelDelayThread(500); waited++; }
+      static int n; if (n++ < 40) debugPrintf("chunk for %s: filled %u / %u (waited %d ms)\n", nm ? nm : "?", chunk[5], chunk[6], waited / 2);
+    } else { static int n; if (n++ < 20) debugPrintf("chunk for %s: not in translate vector\n", nm ? nm : "?"); }
+  }
   int r = orig_TranslateStream(parent, asset, stream, flag);
   { static int n2; if (n2++ < 30) debugPrintf("  -> %d\n", r); }
   if (r == 4) { done[done_i].asset = asset; done[done_i].name = (const char *)((uint32_t *)asset)[6]; done_i = (done_i + 1) % DONE_N; }
@@ -206,28 +207,6 @@ static int hook_SemWait(void *sem, void *tt) {
   if ((uintptr_t)sem == GALLOC + 0x134) translator_tid = sceKernelGetThreadId();
   int r = orig_SemWait(sem, tt);
   if ((uintptr_t)sem == GALLOC + 0x134) {
-    // Mailbox fix-up. +0x30 is a single-slot mailbox that nothing pops and the translator reads even when empty.
-    // The asset to translate next is +0x11c[0]; its request record is at asset+0x30 (set by the Asset constructor).
-    // If the mailbox is empty or holds an already-translated asset, install the next asset's record.
-    uint32_t *tv = *(uint32_t **)(GALLOC + 0x30), *tl = *(uint32_t **)(GALLOC + 0x11c);
-    if (tv && tl) {
-      uint32_t *tb = (uint32_t *)tv[0], *te = (uint32_t *)tv[1]; int n30 = (int)(te - tb);
-      uint32_t *lb = (uint32_t *)tl[0], *le = (uint32_t *)tl[1]; int n11c = (int)(le - lb);
-      uint32_t *next = n11c > 0 ? (uint32_t *)lb[0] : NULL;
-      if (next && *next && !already_done(next, (const char *)next[6])) {
-        uint32_t *rec = NULL;
-        { uint32_t *uv = *(uint32_t **)(GALLOC + 0x2c); if (uv) { uint32_t *ub = (uint32_t *)uv[0]; if (ub && ub[0] && ((uint32_t *)ub[0])[3] == (uint32_t)next) rec = (uint32_t *)ub[0]; } }
-        if (!rec && (uintptr_t)next[12] > 0x80000000 && ((uint32_t *)next[12])[3] == (uint32_t)next) rec = (uint32_t *)next[12];
-        int rec_ok = rec != NULL;
-        uint32_t *cur = n30 > 0 ? (uint32_t *)tb[0] : NULL;
-        int cur_done = !cur || !cur[3] || already_done((void *)cur[3], (const char *)((uint32_t *)cur[3])[6]);
-        static int c; if (c++ < 200) debugPrintf("mailbox: n30=%d cur=%p(done=%d) next=%p rec=%p(ok=%d)\n", n30, cur, cur_done, next, rec, rec_ok);
-        if (rec_ok && cur_done) {
-          if (n30 == 0) { tb[0] = (uint32_t)rec; tv[1] = (uint32_t)(tb + 1); } else tb[0] = (uint32_t)rec;
-          debugPrintf("mailbox: installed record for %s\n", (const char *)next[6]);
-        }
-      }
-    }
     // dump the loader's request vectors
     static int c;
     if (c++ < 200) {
