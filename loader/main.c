@@ -270,16 +270,7 @@ static void hook_UnpackUpdate(void) {
   if (stage_log++ < 200) { mailbox_state(s, sizeof s); debugPrintf("UnpackUpdate out%s\n", s); }
 }
 
-// ---- chunk allocation trace: how the loader fragments each file ----
-static void *(*orig_ChunkAlloc)(unsigned, int, const char *);
-static void *hook_ChunkAlloc(unsigned size, int type, const char *nm) {
-  void *c = orig_ChunkAlloc(size, type, nm);
-  static int n; if (n++ < 120) debugPrintf("ChunkAlloc(%u, %d, %s) -> %p\n", size, type, nm ? nm : "?", c);
-  return c;
-}
-
 static void install_hooks(void) {
-  HOOK(0x639674, hook_ChunkAlloc, orig_ChunkAlloc);
   HOOK(0x6438c0, hook_LoadingUpdate, orig_LoadingUpdate);
   HOOK(0x642b78, hook_UnpackUpdate, orig_UnpackUpdate);
   HOOK(0x483318, hook_SemPost, orig_SemPost);
