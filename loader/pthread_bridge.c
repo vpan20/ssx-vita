@@ -14,7 +14,8 @@
 #include "stubs.h"
 
 #define IS_UNINIT(v) ((uintptr_t)(v) < 0x10000)
-#define DEFAULT_STACK (2 * 1024 * 1024)   // ChunkStream::Read recurses per chunk; 512KB overflowed on a 77KB font
+#define DEFAULT_STACK (512 * 1024)
+#define BIG_STACK     (2 * 1024 * 1024)   // AssetStream Load/Unpack/Translate threads: the font translator alone needs >512KB
 #define MAX_STACK     (4 * 1024 * 1024)
 
 static pthread_mutex_t bridge_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -101,7 +102,7 @@ int pthread_attr_destroy_bridge(bionic_attr *a) {
 int pthread_attr_setdetachstate_bridge(bionic_attr *a, int s) { return pthread_attr_setdetachstate(attr_get(a), s ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE); }
 int pthread_attr_setstacksize_bridge(bionic_attr *a, size_t n) {
   debugPrintf("thread attr stacksize=%u\n", (unsigned)n);
-  if (n < DEFAULT_STACK) n = DEFAULT_STACK; if (n > MAX_STACK) n = MAX_STACK;
+  if (n < 64 * 1024) n = 64 * 1024; if (n > MAX_STACK) n = MAX_STACK;
   return pthread_attr_setstacksize(attr_get(a), n);
 }
 int pthread_attr_setstack_bridge(bionic_attr *a, void *base, size_t n) { return pthread_attr_setstacksize_bridge(a, n); } // ignore caller-supplied stack memory
@@ -135,11 +136,17 @@ static void *thread_boot_fn(void *p) {
   sceKernelChangeThreadCpuAffinityMask(0, 0x70000);   // any of the 3 user cores
   return b.fn(b.arg);
 }
+static int threads_created;
 int pthread_create_bridge(pthread_t *t, bionic_attr *a, void *(*fn)(void *), void *arg) {
   if (!main_prio) { SceKernelThreadInfo ti = { .size = sizeof ti }; if (sceKernelGetThreadInfo(sceKernelGetThreadId(), &ti) >= 0) main_prio = ti.currentPriority; }
   pthread_attr_t *ra = attr_get(a);
   pthread_attr_t tmp;
-  if (!ra) { pthread_attr_init(&tmp); pthread_attr_setstacksize(&tmp, DEFAULT_STACK); ra = &tmp; }
+  int idx = ++threads_created;
+  // Creation order is fixed by the engine: 1 replay + 4 job + 3 filesys threads, then AssetStream Load/Unpack/Translate (9..11).
+  size_t want = (idx >= 9 && idx <= 11) ? BIG_STACK : DEFAULT_STACK;
+  if (!ra) { pthread_attr_init(&tmp); pthread_attr_setstacksize(&tmp, want); ra = &tmp; }
+  else if (want > DEFAULT_STACK) pthread_attr_setstacksize(ra, want);
+  debugPrintf("pthread_create #%d stack=%uKB\n", idx, (unsigned)(want / 1024));
   thread_boot *b = malloc(sizeof *b); b->fn = fn; b->arg = arg;
   int r = pthread_create(t, ra, thread_boot_fn, b);
   if (ra == &tmp) pthread_attr_destroy(&tmp);
