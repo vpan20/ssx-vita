@@ -213,7 +213,7 @@ static jni_method methods[] = {
   { "Resume",               (uintptr_t)retv },{ "Release",           (uintptr_t)retv },{ "SetVolume", (uintptr_t)retv },
   { "<init>",               (uintptr_t)ret1 },
   // device capability queries (DeviceAndroid delegate)
-  { "GetAccelerometerCount", (uintptr_t)ret0 }, { "GetCameraCount", (uintptr_t)ret0 }, { "GetCompassCount", (uintptr_t)ret0 },
+  { "GetAccelerometerCount", (uintptr_t)ret1 },   // the game registers an accelerometer listener unconditionally { "GetCameraCount", (uintptr_t)ret0 }, { "GetCompassCount", (uintptr_t)ret0 },
   { "GetGyroscopeCount", (uintptr_t)ret0 }, { "GetMicrophoneCount", (uintptr_t)ret0 }, { "GetTouchPadCount", (uintptr_t)ret0 },
   { "GetTouchScreenCount", (uintptr_t)ret1 }, { "GetTrackBallCount", (uintptr_t)ret0 }, { "GetVibratorCount", (uintptr_t)ret0 },
   { "GetApplicationVersionCode", (uintptr_t)app_vercode }, { "GetApplicationVersion", (uintptr_t)app_ver },

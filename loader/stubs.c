@@ -15,6 +15,7 @@
 
 void debugPrintf(const char*fmt,...){va_list a;va_start(a,fmt);char b[1024];int n=vsnprintf(b,sizeof b,fmt,a);va_end(a);if(n<=0)return;
   SceUID fd=sceIoOpen(DATA_PATH"/ssx.log",SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND,0777);
+  if(fd<0)fd=sceIoOpen("ux0:data/ssx.log",SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND,0777);   // fallback if uma0 write fails
   if(fd>=0){sceIoWrite(fd,b,n);sceIoClose(fd);}
   sceClibPrintf("%s",b);}
 void log_vprintf(const char*tag,const char*fmt,va_list a){if(!fmt)return;char b[1024];vsnprintf(b,sizeof b,fmt,a);debugPrintf("[%s] %s\n",tag,b);}
