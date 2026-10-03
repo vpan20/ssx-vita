@@ -91,17 +91,6 @@ static void hook_AssetRelease(void *asset, int b, int state) {
 static int hook_TranslateStream(void *parent, void *asset, void *stream, int flag) {
   const char *nm = (asset && *(uint32_t *)asset) ? (const char *)((uint32_t *)asset)[6] : NULL;
   if (asset && *(uint32_t *)asset) {
-    if (already_done(asset, nm)) {
-      // Repeated pass over an already-translated asset (the queue drains one node per pass). Its chunk data was
-      // released after the first success, so it must NOT be parsed again: hand the original a zero-length stream
-      // (it fails fast at "size == 0" and still releases the loader lock on exit), keep the asset alive with an
-      // extra reference, and report state 4 so the game still sees it as translated.
-      uint32_t *rc = &((uint32_t *)asset)[8]; *rc += 4;
-      uint32_t *sw = stream; if (sw) sw[4] = 0;
-      static int n; if (n++ < 10) debugPrintf("TranslateStream: repeat pass for %s — skipped parse, reporting translated\n", nm ? nm : "?");
-      orig_TranslateStream(parent, asset, stream, flag);
-      return 4;
-    }
   }
   if (!asset || !*(uint32_t *)asset) {
     uint32_t *w = asset;
@@ -126,7 +115,6 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
   }
   int r = orig_TranslateStream(parent, asset, stream, flag);
   { static int n2; if (n2++ < 30) debugPrintf("  -> %d\n", r); }
-  if (r == 4) { done[done_i].asset = asset; done[done_i].name = (const char *)((uint32_t *)asset)[6]; done_i = (done_i + 1) % DONE_N; }
   return r;
 }
 // AssetStream::Loader::ChunkifyFail(asset): the loader gave up reading this asset's data
