@@ -371,7 +371,8 @@ int main(int argc, char *argv[]) {
     }
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }
-    vglSwapBuffers(GL_FALSE);
+    extern void gl_lock_acquire(void), gl_lock_release(void);
+    gl_lock_acquire(); vglSwapBuffers(GL_FALSE); gl_lock_release();
     if (frame <= 5) debugPrintf("  frame %u swapped\n", frame - 1);
   }
   return 0;

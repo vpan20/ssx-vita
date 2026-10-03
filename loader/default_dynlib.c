@@ -139,6 +139,135 @@ int open_log(const char *p, int f, ...) { int fd = open(p, f, 0777); debugPrintf
 void *malloc_log(size_t n) { void *p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
 void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
 void *memalign_log(size_t al, size_t n) { void *p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
+// GL wrappers (gl_lock.c)
+extern void glActiveTexture_locked();
+extern void glAttachShader_locked();
+extern void glBindAttribLocation_locked();
+extern void glBindBuffer_locked();
+extern void glBindFramebuffer_locked();
+extern void glBindRenderbuffer_locked();
+extern void glBindTexture_locked();
+extern void glBlendEquation_locked();
+extern void glBlendEquationSeparate_locked();
+extern void glBlendFunc_locked();
+extern void glBlendFuncSeparate_locked();
+extern void glBufferData_locked();
+extern void glBufferSubData_locked();
+extern void glCheckFramebufferStatus_locked();
+extern void glClear_locked();
+extern void glClearColor_locked();
+extern void glClearDepthf_locked();
+extern void glClearStencil_locked();
+extern void glColorMask_locked();
+extern void glCompileShader_locked();
+extern void glCompressedTexImage2D_locked();
+extern void glCopyTexImage2D_locked();
+extern void glCopyTexSubImage2D_locked();
+extern void glCreateProgram_locked();
+extern void glCreateShader_locked();
+extern void glCullFace_locked();
+extern void glDeleteBuffers_locked();
+extern void glDeleteFramebuffers_locked();
+extern void glDeleteProgram_locked();
+extern void glDeleteRenderbuffers_locked();
+extern void glDeleteShader_locked();
+extern void glDeleteTextures_locked();
+extern void glDepthFunc_locked();
+extern void glDepthMask_locked();
+extern void glDepthRangef_locked();
+extern void glDisable_locked();
+extern void glDisableVertexAttribArray_locked();
+extern void glDrawArrays_locked();
+extern void glDrawElements_locked();
+extern void glEnable_locked();
+extern void glEnableVertexAttribArray_locked();
+extern void glFinish_locked();
+extern void glFlush_locked();
+extern void glFramebufferRenderbuffer_locked();
+extern void glFramebufferTexture2D_locked();
+extern void glFrontFace_locked();
+extern void glGenBuffers_locked();
+extern void glGenFramebuffers_locked();
+extern void glGenRenderbuffers_locked();
+extern void glGenTextures_locked();
+extern void glGenerateMipmap_locked();
+extern void glGetActiveAttrib_locked();
+extern void glGetActiveUniform_locked();
+extern void glGetAttachedShaders_locked();
+extern void glGetAttribLocation_locked();
+extern void glGetBooleanv_locked();
+extern void glGetBufferParameteriv_locked();
+extern void glGetError_locked();
+extern void glGetFloatv_locked();
+extern void glGetFramebufferAttachmentParameteriv_locked();
+extern void glGetIntegerv_locked();
+extern void glGetProgramInfoLog_locked();
+extern void glGetProgramiv_locked();
+extern void glGetShaderInfoLog_locked();
+extern void glGetShaderSource_locked();
+extern void glGetShaderiv_locked();
+extern void glGetString_locked();
+extern void glGetUniformLocation_locked();
+extern void glGetVertexAttribPointerv_locked();
+extern void glGetVertexAttribfv_locked();
+extern void glGetVertexAttribiv_locked();
+extern void glHint_locked();
+extern void glIsEnabled_locked();
+extern void glIsFramebuffer_locked();
+extern void glIsProgram_locked();
+extern void glIsRenderbuffer_locked();
+extern void glIsTexture_locked();
+extern void glLineWidth_locked();
+extern void glLinkProgram_locked();
+extern void glPixelStorei_locked();
+extern void glPolygonOffset_locked();
+extern void glReadPixels_locked();
+extern void glReleaseShaderCompiler_locked();
+extern void glRenderbufferStorage_locked();
+extern void glScissor_locked();
+extern void glShaderBinary_locked();
+extern void glShaderSource_locked();
+extern void glStencilFunc_locked();
+extern void glStencilFuncSeparate_locked();
+extern void glStencilMask_locked();
+extern void glStencilMaskSeparate_locked();
+extern void glStencilOp_locked();
+extern void glStencilOpSeparate_locked();
+extern void glTexImage2D_locked();
+extern void glTexParameterf_locked();
+extern void glTexParameteri_locked();
+extern void glTexParameteriv_locked();
+extern void glTexSubImage2D_locked();
+extern void glUniform1f_locked();
+extern void glUniform1fv_locked();
+extern void glUniform1i_locked();
+extern void glUniform1iv_locked();
+extern void glUniform2f_locked();
+extern void glUniform2fv_locked();
+extern void glUniform2i_locked();
+extern void glUniform2iv_locked();
+extern void glUniform3f_locked();
+extern void glUniform3fv_locked();
+extern void glUniform3i_locked();
+extern void glUniform3iv_locked();
+extern void glUniform4f_locked();
+extern void glUniform4fv_locked();
+extern void glUniform4i_locked();
+extern void glUniform4iv_locked();
+extern void glUniformMatrix2fv_locked();
+extern void glUniformMatrix3fv_locked();
+extern void glUniformMatrix4fv_locked();
+extern void glUseProgram_locked();
+extern void glVertexAttrib1f_locked();
+extern void glVertexAttrib1fv_locked();
+extern void glVertexAttrib2f_locked();
+extern void glVertexAttrib2fv_locked();
+extern void glVertexAttrib3f_locked();
+extern void glVertexAttrib3fv_locked();
+extern void glVertexAttrib4f_locked();
+extern void glVertexAttrib4fv_locked();
+extern void glVertexAttribPointer_locked();
+extern void glViewport_locked();
 // libgcc / libstdc++ runtime symbols with no header
 extern void __aeabi_atexit();
 extern void __aeabi_d2lz();
@@ -276,148 +405,148 @@ so_default_dynlib default_dynlib[] = {
   { "getsockname", (uintptr_t)&getsockname },
   { "getsockopt", (uintptr_t)&getsockopt },
   { "gettimeofday", (uintptr_t)&gettimeofday },
-  { "glActiveTexture", (uintptr_t)&glActiveTexture },
-  { "glAttachShader", (uintptr_t)&glAttachShader },
-  { "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
-  { "glBindBuffer", (uintptr_t)&glBindBuffer },
-  { "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
-  { "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
-  { "glBindTexture", (uintptr_t)&glBindTexture },
+  { "glActiveTexture", (uintptr_t)&glActiveTexture_locked },
+  { "glAttachShader", (uintptr_t)&glAttachShader_locked },
+  { "glBindAttribLocation", (uintptr_t)&glBindAttribLocation_locked },
+  { "glBindBuffer", (uintptr_t)&glBindBuffer_locked },
+  { "glBindFramebuffer", (uintptr_t)&glBindFramebuffer_locked },
+  { "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer_locked },
+  { "glBindTexture", (uintptr_t)&glBindTexture_locked },
   { "glBlendColor", (uintptr_t)&glBlendColor },
-  { "glBlendEquation", (uintptr_t)&glBlendEquation },
-  { "glBlendEquationSeparate", (uintptr_t)&glBlendEquationSeparate },
-  { "glBlendFunc", (uintptr_t)&glBlendFunc },
-  { "glBlendFuncSeparate", (uintptr_t)&glBlendFuncSeparate },
-  { "glBufferData", (uintptr_t)&glBufferData },
-  { "glBufferSubData", (uintptr_t)&glBufferSubData },
-  { "glCheckFramebufferStatus", (uintptr_t)&glCheckFramebufferStatus },
-  { "glClear", (uintptr_t)&glClear },
-  { "glClearColor", (uintptr_t)&glClearColor },
-  { "glClearDepthf", (uintptr_t)&glClearDepthf },
-  { "glClearStencil", (uintptr_t)&glClearStencil },
-  { "glColorMask", (uintptr_t)&glColorMask },
-  { "glCompileShader", (uintptr_t)&glCompileShader_log },
-  { "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D },
+  { "glBlendEquation", (uintptr_t)&glBlendEquation_locked },
+  { "glBlendEquationSeparate", (uintptr_t)&glBlendEquationSeparate_locked },
+  { "glBlendFunc", (uintptr_t)&glBlendFunc_locked },
+  { "glBlendFuncSeparate", (uintptr_t)&glBlendFuncSeparate_locked },
+  { "glBufferData", (uintptr_t)&glBufferData_locked },
+  { "glBufferSubData", (uintptr_t)&glBufferSubData_locked },
+  { "glCheckFramebufferStatus", (uintptr_t)&glCheckFramebufferStatus_locked },
+  { "glClear", (uintptr_t)&glClear_locked },
+  { "glClearColor", (uintptr_t)&glClearColor_locked },
+  { "glClearDepthf", (uintptr_t)&glClearDepthf_locked },
+  { "glClearStencil", (uintptr_t)&glClearStencil_locked },
+  { "glColorMask", (uintptr_t)&glColorMask_locked },
+  { "glCompileShader", (uintptr_t)&glCompileShader_locked },
+  { "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D_locked },
   { "glCompressedTexSubImage2D", (uintptr_t)&glCompressedTexSubImage2D },
-  { "glCopyTexImage2D", (uintptr_t)&glCopyTexImage2D },
-  { "glCopyTexSubImage2D", (uintptr_t)&glCopyTexSubImage2D },
-  { "glCreateProgram", (uintptr_t)&glCreateProgram },
-  { "glCreateShader", (uintptr_t)&glCreateShader },
-  { "glCullFace", (uintptr_t)&glCullFace },
-  { "glDeleteBuffers", (uintptr_t)&glDeleteBuffers },
-  { "glDeleteFramebuffers", (uintptr_t)&glDeleteFramebuffers },
-  { "glDeleteProgram", (uintptr_t)&glDeleteProgram },
-  { "glDeleteRenderbuffers", (uintptr_t)&glDeleteRenderbuffers },
-  { "glDeleteShader", (uintptr_t)&glDeleteShader },
-  { "glDeleteTextures", (uintptr_t)&glDeleteTextures },
-  { "glDepthFunc", (uintptr_t)&glDepthFunc },
-  { "glDepthMask", (uintptr_t)&glDepthMask },
-  { "glDepthRangef", (uintptr_t)&glDepthRangef },
+  { "glCopyTexImage2D", (uintptr_t)&glCopyTexImage2D_locked },
+  { "glCopyTexSubImage2D", (uintptr_t)&glCopyTexSubImage2D_locked },
+  { "glCreateProgram", (uintptr_t)&glCreateProgram_locked },
+  { "glCreateShader", (uintptr_t)&glCreateShader_locked },
+  { "glCullFace", (uintptr_t)&glCullFace_locked },
+  { "glDeleteBuffers", (uintptr_t)&glDeleteBuffers_locked },
+  { "glDeleteFramebuffers", (uintptr_t)&glDeleteFramebuffers_locked },
+  { "glDeleteProgram", (uintptr_t)&glDeleteProgram_locked },
+  { "glDeleteRenderbuffers", (uintptr_t)&glDeleteRenderbuffers_locked },
+  { "glDeleteShader", (uintptr_t)&glDeleteShader_locked },
+  { "glDeleteTextures", (uintptr_t)&glDeleteTextures_locked },
+  { "glDepthFunc", (uintptr_t)&glDepthFunc_locked },
+  { "glDepthMask", (uintptr_t)&glDepthMask_locked },
+  { "glDepthRangef", (uintptr_t)&glDepthRangef_locked },
   { "glDetachShader", (uintptr_t)&glDetachShader },
-  { "glDisable", (uintptr_t)&glDisable },
-  { "glDisableVertexAttribArray", (uintptr_t)&glDisableVertexAttribArray },
-  { "glDrawArrays", (uintptr_t)&glDrawArrays },
-  { "glDrawElements", (uintptr_t)&glDrawElements },
-  { "glEnable", (uintptr_t)&glEnable },
-  { "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray },
-  { "glFinish", (uintptr_t)&glFinish },
-  { "glFlush", (uintptr_t)&glFlush },
-  { "glFramebufferRenderbuffer", (uintptr_t)&glFramebufferRenderbuffer },
-  { "glFramebufferTexture2D", (uintptr_t)&glFramebufferTexture2D },
-  { "glFrontFace", (uintptr_t)&glFrontFace },
-  { "glGenBuffers", (uintptr_t)&glGenBuffers },
-  { "glGenFramebuffers", (uintptr_t)&glGenFramebuffers },
-  { "glGenRenderbuffers", (uintptr_t)&glGenRenderbuffers },
-  { "glGenTextures", (uintptr_t)&glGenTextures },
-  { "glGenerateMipmap", (uintptr_t)&glGenerateMipmap },
-  { "glGetActiveAttrib", (uintptr_t)&glGetActiveAttrib },
-  { "glGetActiveUniform", (uintptr_t)&glGetActiveUniform },
-  { "glGetAttachedShaders", (uintptr_t)&glGetAttachedShaders },
-  { "glGetAttribLocation", (uintptr_t)&glGetAttribLocation },
-  { "glGetBooleanv", (uintptr_t)&glGetBooleanv },
-  { "glGetBufferParameteriv", (uintptr_t)&glGetBufferParameteriv },
-  { "glGetError", (uintptr_t)&glGetError },
-  { "glGetFloatv", (uintptr_t)&glGetFloatv },
-  { "glGetFramebufferAttachmentParameteriv", (uintptr_t)&glGetFramebufferAttachmentParameteriv },
-  { "glGetIntegerv", (uintptr_t)&glGetIntegerv },
-  { "glGetProgramInfoLog", (uintptr_t)&glGetProgramInfoLog },
-  { "glGetProgramiv", (uintptr_t)&glGetProgramiv },
+  { "glDisable", (uintptr_t)&glDisable_locked },
+  { "glDisableVertexAttribArray", (uintptr_t)&glDisableVertexAttribArray_locked },
+  { "glDrawArrays", (uintptr_t)&glDrawArrays_locked },
+  { "glDrawElements", (uintptr_t)&glDrawElements_locked },
+  { "glEnable", (uintptr_t)&glEnable_locked },
+  { "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray_locked },
+  { "glFinish", (uintptr_t)&glFinish_locked },
+  { "glFlush", (uintptr_t)&glFlush_locked },
+  { "glFramebufferRenderbuffer", (uintptr_t)&glFramebufferRenderbuffer_locked },
+  { "glFramebufferTexture2D", (uintptr_t)&glFramebufferTexture2D_locked },
+  { "glFrontFace", (uintptr_t)&glFrontFace_locked },
+  { "glGenBuffers", (uintptr_t)&glGenBuffers_locked },
+  { "glGenFramebuffers", (uintptr_t)&glGenFramebuffers_locked },
+  { "glGenRenderbuffers", (uintptr_t)&glGenRenderbuffers_locked },
+  { "glGenTextures", (uintptr_t)&glGenTextures_locked },
+  { "glGenerateMipmap", (uintptr_t)&glGenerateMipmap_locked },
+  { "glGetActiveAttrib", (uintptr_t)&glGetActiveAttrib_locked },
+  { "glGetActiveUniform", (uintptr_t)&glGetActiveUniform_locked },
+  { "glGetAttachedShaders", (uintptr_t)&glGetAttachedShaders_locked },
+  { "glGetAttribLocation", (uintptr_t)&glGetAttribLocation_locked },
+  { "glGetBooleanv", (uintptr_t)&glGetBooleanv_locked },
+  { "glGetBufferParameteriv", (uintptr_t)&glGetBufferParameteriv_locked },
+  { "glGetError", (uintptr_t)&glGetError_locked },
+  { "glGetFloatv", (uintptr_t)&glGetFloatv_locked },
+  { "glGetFramebufferAttachmentParameteriv", (uintptr_t)&glGetFramebufferAttachmentParameteriv_locked },
+  { "glGetIntegerv", (uintptr_t)&glGetIntegerv_locked },
+  { "glGetProgramInfoLog", (uintptr_t)&glGetProgramInfoLog_locked },
+  { "glGetProgramiv", (uintptr_t)&glGetProgramiv_locked },
   { "glGetRenderbufferParameteriv", (uintptr_t)&glGetRenderbufferParameteriv },
-  { "glGetShaderInfoLog", (uintptr_t)&glGetShaderInfoLog },
+  { "glGetShaderInfoLog", (uintptr_t)&glGetShaderInfoLog_locked },
   { "glGetShaderPrecisionFormat", (uintptr_t)&glGetShaderPrecisionFormat },
-  { "glGetShaderSource", (uintptr_t)&glGetShaderSource },
-  { "glGetShaderiv", (uintptr_t)&glGetShaderiv },
-  { "glGetString", (uintptr_t)&glGetString },
+  { "glGetShaderSource", (uintptr_t)&glGetShaderSource_locked },
+  { "glGetShaderiv", (uintptr_t)&glGetShaderiv_locked },
+  { "glGetString", (uintptr_t)&glGetString_locked },
   { "glGetTexParameterfv", (uintptr_t)&glGetTexParameterfv },
   { "glGetTexParameteriv", (uintptr_t)&glGetTexParameteriv },
-  { "glGetUniformLocation", (uintptr_t)&glGetUniformLocation },
+  { "glGetUniformLocation", (uintptr_t)&glGetUniformLocation_locked },
   { "glGetUniformfv", (uintptr_t)&glGetUniformfv },
   { "glGetUniformiv", (uintptr_t)&glGetUniformiv },
-  { "glGetVertexAttribPointerv", (uintptr_t)&glGetVertexAttribPointerv },
-  { "glGetVertexAttribfv", (uintptr_t)&glGetVertexAttribfv },
-  { "glGetVertexAttribiv", (uintptr_t)&glGetVertexAttribiv },
-  { "glHint", (uintptr_t)&glHint },
+  { "glGetVertexAttribPointerv", (uintptr_t)&glGetVertexAttribPointerv_locked },
+  { "glGetVertexAttribfv", (uintptr_t)&glGetVertexAttribfv_locked },
+  { "glGetVertexAttribiv", (uintptr_t)&glGetVertexAttribiv_locked },
+  { "glHint", (uintptr_t)&glHint_locked },
   { "glIsBuffer", (uintptr_t)&glIsBuffer },
-  { "glIsEnabled", (uintptr_t)&glIsEnabled },
-  { "glIsFramebuffer", (uintptr_t)&glIsFramebuffer },
-  { "glIsProgram", (uintptr_t)&glIsProgram },
-  { "glIsRenderbuffer", (uintptr_t)&glIsRenderbuffer },
+  { "glIsEnabled", (uintptr_t)&glIsEnabled_locked },
+  { "glIsFramebuffer", (uintptr_t)&glIsFramebuffer_locked },
+  { "glIsProgram", (uintptr_t)&glIsProgram_locked },
+  { "glIsRenderbuffer", (uintptr_t)&glIsRenderbuffer_locked },
   { "glIsShader", (uintptr_t)&glIsShader },
-  { "glIsTexture", (uintptr_t)&glIsTexture },
-  { "glLineWidth", (uintptr_t)&glLineWidth },
-  { "glLinkProgram", (uintptr_t)&glLinkProgram_log },
-  { "glPixelStorei", (uintptr_t)&glPixelStorei },
-  { "glPolygonOffset", (uintptr_t)&glPolygonOffset },
-  { "glReadPixels", (uintptr_t)&glReadPixels },
-  { "glReleaseShaderCompiler", (uintptr_t)&glReleaseShaderCompiler },
-  { "glRenderbufferStorage", (uintptr_t)&glRenderbufferStorage },
+  { "glIsTexture", (uintptr_t)&glIsTexture_locked },
+  { "glLineWidth", (uintptr_t)&glLineWidth_locked },
+  { "glLinkProgram", (uintptr_t)&glLinkProgram_locked },
+  { "glPixelStorei", (uintptr_t)&glPixelStorei_locked },
+  { "glPolygonOffset", (uintptr_t)&glPolygonOffset_locked },
+  { "glReadPixels", (uintptr_t)&glReadPixels_locked },
+  { "glReleaseShaderCompiler", (uintptr_t)&glReleaseShaderCompiler_locked },
+  { "glRenderbufferStorage", (uintptr_t)&glRenderbufferStorage_locked },
   { "glSampleCoverage", (uintptr_t)&glSampleCoverage },
-  { "glScissor", (uintptr_t)&glScissor },
-  { "glShaderBinary", (uintptr_t)&glShaderBinary },
-  { "glShaderSource", (uintptr_t)&glShaderSource_log },
-  { "glStencilFunc", (uintptr_t)&glStencilFunc },
-  { "glStencilFuncSeparate", (uintptr_t)&glStencilFuncSeparate },
-  { "glStencilMask", (uintptr_t)&glStencilMask },
-  { "glStencilMaskSeparate", (uintptr_t)&glStencilMaskSeparate },
-  { "glStencilOp", (uintptr_t)&glStencilOp },
-  { "glStencilOpSeparate", (uintptr_t)&glStencilOpSeparate },
-  { "glTexImage2D", (uintptr_t)&glTexImage2D },
-  { "glTexParameterf", (uintptr_t)&glTexParameterf },
+  { "glScissor", (uintptr_t)&glScissor_locked },
+  { "glShaderBinary", (uintptr_t)&glShaderBinary_locked },
+  { "glShaderSource", (uintptr_t)&glShaderSource_locked },
+  { "glStencilFunc", (uintptr_t)&glStencilFunc_locked },
+  { "glStencilFuncSeparate", (uintptr_t)&glStencilFuncSeparate_locked },
+  { "glStencilMask", (uintptr_t)&glStencilMask_locked },
+  { "glStencilMaskSeparate", (uintptr_t)&glStencilMaskSeparate_locked },
+  { "glStencilOp", (uintptr_t)&glStencilOp_locked },
+  { "glStencilOpSeparate", (uintptr_t)&glStencilOpSeparate_locked },
+  { "glTexImage2D", (uintptr_t)&glTexImage2D_locked },
+  { "glTexParameterf", (uintptr_t)&glTexParameterf_locked },
   { "glTexParameterfv", (uintptr_t)&glTexParameterfv },
-  { "glTexParameteri", (uintptr_t)&glTexParameteri },
-  { "glTexParameteriv", (uintptr_t)&glTexParameteriv },
-  { "glTexSubImage2D", (uintptr_t)&glTexSubImage2D },
-  { "glUniform1f", (uintptr_t)&glUniform1f },
-  { "glUniform1fv", (uintptr_t)&glUniform1fv },
-  { "glUniform1i", (uintptr_t)&glUniform1i },
-  { "glUniform1iv", (uintptr_t)&glUniform1iv },
-  { "glUniform2f", (uintptr_t)&glUniform2f },
-  { "glUniform2fv", (uintptr_t)&glUniform2fv },
-  { "glUniform2i", (uintptr_t)&glUniform2i },
-  { "glUniform2iv", (uintptr_t)&glUniform2iv },
-  { "glUniform3f", (uintptr_t)&glUniform3f },
-  { "glUniform3fv", (uintptr_t)&glUniform3fv },
-  { "glUniform3i", (uintptr_t)&glUniform3i },
-  { "glUniform3iv", (uintptr_t)&glUniform3iv },
-  { "glUniform4f", (uintptr_t)&glUniform4f },
-  { "glUniform4fv", (uintptr_t)&glUniform4fv },
-  { "glUniform4i", (uintptr_t)&glUniform4i },
-  { "glUniform4iv", (uintptr_t)&glUniform4iv },
-  { "glUniformMatrix2fv", (uintptr_t)&glUniformMatrix2fv },
-  { "glUniformMatrix3fv", (uintptr_t)&glUniformMatrix3fv },
-  { "glUniformMatrix4fv", (uintptr_t)&glUniformMatrix4fv },
-  { "glUseProgram", (uintptr_t)&glUseProgram },
+  { "glTexParameteri", (uintptr_t)&glTexParameteri_locked },
+  { "glTexParameteriv", (uintptr_t)&glTexParameteriv_locked },
+  { "glTexSubImage2D", (uintptr_t)&glTexSubImage2D_locked },
+  { "glUniform1f", (uintptr_t)&glUniform1f_locked },
+  { "glUniform1fv", (uintptr_t)&glUniform1fv_locked },
+  { "glUniform1i", (uintptr_t)&glUniform1i_locked },
+  { "glUniform1iv", (uintptr_t)&glUniform1iv_locked },
+  { "glUniform2f", (uintptr_t)&glUniform2f_locked },
+  { "glUniform2fv", (uintptr_t)&glUniform2fv_locked },
+  { "glUniform2i", (uintptr_t)&glUniform2i_locked },
+  { "glUniform2iv", (uintptr_t)&glUniform2iv_locked },
+  { "glUniform3f", (uintptr_t)&glUniform3f_locked },
+  { "glUniform3fv", (uintptr_t)&glUniform3fv_locked },
+  { "glUniform3i", (uintptr_t)&glUniform3i_locked },
+  { "glUniform3iv", (uintptr_t)&glUniform3iv_locked },
+  { "glUniform4f", (uintptr_t)&glUniform4f_locked },
+  { "glUniform4fv", (uintptr_t)&glUniform4fv_locked },
+  { "glUniform4i", (uintptr_t)&glUniform4i_locked },
+  { "glUniform4iv", (uintptr_t)&glUniform4iv_locked },
+  { "glUniformMatrix2fv", (uintptr_t)&glUniformMatrix2fv_locked },
+  { "glUniformMatrix3fv", (uintptr_t)&glUniformMatrix3fv_locked },
+  { "glUniformMatrix4fv", (uintptr_t)&glUniformMatrix4fv_locked },
+  { "glUseProgram", (uintptr_t)&glUseProgram_locked },
   { "glValidateProgram", (uintptr_t)&glValidateProgram },
-  { "glVertexAttrib1f", (uintptr_t)&glVertexAttrib1f },
-  { "glVertexAttrib1fv", (uintptr_t)&glVertexAttrib1fv },
-  { "glVertexAttrib2f", (uintptr_t)&glVertexAttrib2f },
-  { "glVertexAttrib2fv", (uintptr_t)&glVertexAttrib2fv },
-  { "glVertexAttrib3f", (uintptr_t)&glVertexAttrib3f },
-  { "glVertexAttrib3fv", (uintptr_t)&glVertexAttrib3fv },
-  { "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
-  { "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv },
-  { "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
-  { "glViewport", (uintptr_t)&glViewport },
+  { "glVertexAttrib1f", (uintptr_t)&glVertexAttrib1f_locked },
+  { "glVertexAttrib1fv", (uintptr_t)&glVertexAttrib1fv_locked },
+  { "glVertexAttrib2f", (uintptr_t)&glVertexAttrib2f_locked },
+  { "glVertexAttrib2fv", (uintptr_t)&glVertexAttrib2fv_locked },
+  { "glVertexAttrib3f", (uintptr_t)&glVertexAttrib3f_locked },
+  { "glVertexAttrib3fv", (uintptr_t)&glVertexAttrib3fv_locked },
+  { "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f_locked },
+  { "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv_locked },
+  { "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer_locked },
+  { "glViewport", (uintptr_t)&glViewport_locked },
   { "gmtime", (uintptr_t)&gmtime },
   { "inet_addr", (uintptr_t)&inet_addr },
   { "inet_ntoa", (uintptr_t)&inet_ntoa },
