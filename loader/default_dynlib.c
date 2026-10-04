@@ -133,8 +133,22 @@ extern void sem_post_bridge();
 extern void sem_timedwait_bridge();
 extern void sem_trywait_bridge();
 extern void sem_wait_bridge();
-FILE *fopen_log(const char *p, const char *m) { FILE *f = fopen(p, m); debugPrintf("fopen(%s,%s) -> %p\n", p, m, f); return f; }
-int open_log(const char *p, int f, ...) { int fd = open(p, f, 0777); debugPrintf("open(%s) -> %d\n", p, fd); return fd; }
+// ---- POSIX path translation: the game is given Android-style absolute storage paths ("/data/ssx/...") so its
+// filesystem layer routes them to its native device; every libc call maps that prefix back to the card.
+const char *fix_path(const char *p, char *out, size_t n) {
+  if (p && !strncmp(p, "/data/ssx/", 10)) { snprintf(out, n, DATA_PATH "/%s", p + 10); return out; }
+  if (p && !strcmp(p, "/data/ssx")) { snprintf(out, n, DATA_PATH); return out; }
+  return p;
+}
+FILE *fopen_log(const char *p, const char *m) { char b[512]; const char *q = fix_path(p, b, sizeof b); FILE *f = fopen(q, m); debugPrintf("fopen(%s,%s) -> %p\n", q, m, f); return f; }
+int open_log(const char *p, int f, ...) { char b[512]; const char *q = fix_path(p, b, sizeof b); int fd = open(q, f, 0777); debugPrintf("open(%s) -> %d\n", q, fd); return fd; }
+DIR *opendir_fix(const char *p) { char b[512]; const char *q = fix_path(p, b, sizeof b); DIR *d = opendir(q); debugPrintf("opendir(%s) -> %p\n", q, d); return d; }
+int stat_fix(const char *p, struct stat *s) { char b[512]; return stat(fix_path(p, b, sizeof b), s); }
+int mkdir_fix(const char *p, int mode) { char b[512]; const char *q = fix_path(p, b, sizeof b); int r = mkdir(q, mode); debugPrintf("mkdir(%s) -> %d\n", q, r); return r; }
+int rmdir_fix(const char *p) { char b[512]; return rmdir(fix_path(p, b, sizeof b)); }
+int unlink_fix(const char *p) { char b[512]; return unlink(fix_path(p, b, sizeof b)); }
+int remove_fix(const char *p) { char b[512]; return remove(fix_path(p, b, sizeof b)); }
+int rename_fix(const char *a, const char *c) { char b1[512], b2[512]; return rename(fix_path(a, b1, sizeof b1), fix_path(c, b2, sizeof b2)); }
 // malloc/free with logging of large requests (game heaps are carved with malloc)
 void *malloc_log(size_t n) { void *p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
 void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
@@ -578,14 +592,14 @@ so_default_dynlib default_dynlib[] = {
   { "memcpy", (uintptr_t)&memcpy },
   { "memmove", (uintptr_t)&memmove },
   { "memset", (uintptr_t)&memset },
-  { "mkdir", (uintptr_t)&mkdir },
+  { "mkdir", (uintptr_t)&mkdir_fix },
   { "mktime", (uintptr_t)&mktime },
   { "mmap", (uintptr_t)&mmap },
   { "modf", (uintptr_t)&modf },
   { "munmap", (uintptr_t)&munmap },
   { "nanosleep", (uintptr_t)&nanosleep_yield },
   { "open", (uintptr_t)&open_log },
-  { "opendir", (uintptr_t)&opendir },
+  { "opendir", (uintptr_t)&opendir_fix },
   { "poll", (uintptr_t)&poll },
   { "pow", (uintptr_t)&pow },
   { "powf", (uintptr_t)&powf },
@@ -635,10 +649,10 @@ so_default_dynlib default_dynlib[] = {
   { "realloc", (uintptr_t)&realloc },
   { "recv", (uintptr_t)&recv },
   { "recvfrom", (uintptr_t)&recvfrom },
-  { "remove", (uintptr_t)&remove },
-  { "rename", (uintptr_t)&rename },
+  { "remove", (uintptr_t)&remove_fix },
+  { "rename", (uintptr_t)&rename_fix },
   { "rewind", (uintptr_t)&rewind },
-  { "rmdir", (uintptr_t)&rmdir },
+  { "rmdir", (uintptr_t)&rmdir_fix },
   { "sched_yield", (uintptr_t)&sched_yield_bridge },
   { "sem_destroy", (uintptr_t)&sem_destroy_bridge },
   { "sem_getvalue", (uintptr_t)&sem_getvalue_bridge },
@@ -666,7 +680,7 @@ so_default_dynlib default_dynlib[] = {
   { "sqrtf", (uintptr_t)&sqrtf },
   { "srand48", (uintptr_t)&srand48 },
   { "sscanf", (uintptr_t)&sscanf },
-  { "stat", (uintptr_t)&stat },
+  { "stat", (uintptr_t)&stat_fix },
   { "statfs", (uintptr_t)&statfs },
   { "strcasecmp", (uintptr_t)&strcasecmp },
   { "strcat", (uintptr_t)&strcat },
@@ -705,7 +719,7 @@ so_default_dynlib default_dynlib[] = {
   { "tzname", (uintptr_t)&tzname },
   { "tzset", (uintptr_t)&tzset },
   { "ungetc", (uintptr_t)&ungetc },
-  { "unlink", (uintptr_t)&unlink },
+  { "unlink", (uintptr_t)&unlink_fix },
   { "unsetenv", (uintptr_t)&unsetenv },
   { "usleep", (uintptr_t)&usleep_yield },
   { "utime", (uintptr_t)&utime },

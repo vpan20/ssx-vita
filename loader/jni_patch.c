@@ -16,9 +16,9 @@ enum { CLASS_GENERIC = 1, CLASS_ACTIVITY, CLASS_EGL, CLASS_ASSETMGR, CLASS_STORA
 static int  ret0(void)          { return 0; }
 static int  ret1(void)          { return 1; }
 static void retv(void)          {}
-static const char *storage_ext(void){ return DATA_PATH; }          // external storage root
-static const char *storage_int(void){ return DATA_PATH "/internal"; }
-static const char *storage_obb(void){ return DATA_PATH "/obb"; }
+static const char *storage_ext(void){ return "/data/ssx/external"; }   // Android-style absolute path; libc calls translate it back to the card
+static const char *storage_int(void){ return "/data/ssx/internal"; }
+static const char *storage_obb(void){ return "/data/ssx/obb"; }
 static const char *device_name(void){ return "PS Vita"; }
 static const char *lang(void)       { return "en"; }
 static int screen_w(void)           { return 960; }

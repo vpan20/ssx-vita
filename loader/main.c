@@ -302,11 +302,11 @@ int main(int argc, char *argv[]) {
   JNI_OnLoad(fake_vm, NULL);           debugPrintf("JNI_OnLoad ok\n");
   audio_bridge_install(&game_mod);     // SubmitAudio -> SceAudioOut ring (replaces the AudioTrack JNI path)
 
-  uintptr_t sInternal = (uintptr_t)jni_new_string(DATA_PATH "/internal");
-  uintptr_t sExternal = (uintptr_t)jni_new_string(DATA_PATH "/external");
-  uintptr_t sObb      = (uintptr_t)jni_new_string(DATA_PATH "/obb");
+  uintptr_t sInternal = (uintptr_t)jni_new_string("/data/ssx/internal");   // Android-style absolute paths; fix_path() maps them to the card
+  uintptr_t sExternal = (uintptr_t)jni_new_string("/data/ssx/external");
+  uintptr_t sObb      = (uintptr_t)jni_new_string("/data/ssx/obb");
   uintptr_t am        = (uintptr_t)fake_asset_manager;
-  sceIoMkdir(DATA_PATH "/external", 0777);
+  sceIoMkdir(DATA_PATH "/external", 0777); sceIoMkdir(DATA_PATH "/internal/ssxv", 0777);
 
   static int fake_activity = 0x41435459;   // any non-null object; the game only keeps a global ref to it
   { fn_jni f = J("Java_com_ea_ssx_MainActivity_InitGameApplication"); if (f) { f(fake_env, (void *)&fake_activity, 0,0,0,0,0,0); debugPrintf("InitGameApplication ok\n"); } }
