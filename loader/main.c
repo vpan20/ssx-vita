@@ -373,6 +373,7 @@ int main(int argc, char *argv[]) {
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }
     extern void gl_lock_acquire(void), gl_lock_release(void);
     gl_lock_acquire(); vglSwapBuffers(GL_FALSE); gl_lock_release();
+    { extern void gl_frame_summary(unsigned); gl_frame_summary(frame - 1); }
     if (frame <= 5) debugPrintf("  frame %u swapped\n", frame - 1);
   }
   return 0;

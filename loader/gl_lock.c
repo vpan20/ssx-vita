@@ -5,6 +5,18 @@
 #include <pthread.h>
 
 static pthread_mutex_t gl_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+#include <stdio.h>
+#include <string.h>
+void debugPrintf(const char *fmt, ...);
+// per-frame GL activity summary (printed by main loop via gl_frame_summary)
+static unsigned c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
+static float c_clear_r, c_clear_g, c_clear_b, c_clear_a;
+void gl_frame_summary(unsigned frame) {
+  if (frame < 12 || frame % 300 == 0)
+    debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
+      frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
+  c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = 0;
+}
 void gl_lock_acquire(void) { pthread_mutex_lock(&gl_lock); }
 void gl_lock_release(void) { pthread_mutex_unlock(&gl_lock); }
 
@@ -12,7 +24,7 @@ void glActiveTexture_locked(GLenum texture) { pthread_mutex_lock(&gl_lock); glAc
 void glAttachShader_locked(GLuint prog, GLuint shad) { pthread_mutex_lock(&gl_lock); glAttachShader(prog, shad); pthread_mutex_unlock(&gl_lock); }
 void glBindAttribLocation_locked(GLuint program, GLuint index, const GLchar *name) { pthread_mutex_lock(&gl_lock); glBindAttribLocation(program, index, name); pthread_mutex_unlock(&gl_lock); }
 void glBindBuffer_locked(GLenum target, GLuint buffer) { pthread_mutex_lock(&gl_lock); glBindBuffer(target, buffer); pthread_mutex_unlock(&gl_lock); }
-void glBindFramebuffer_locked(GLenum target, GLuint framebuffer) { pthread_mutex_lock(&gl_lock); glBindFramebuffer(target, framebuffer); pthread_mutex_unlock(&gl_lock); }
+void glBindFramebuffer_locked(GLenum target, GLuint framebuffer) { pthread_mutex_lock(&gl_lock); c_fbobinds++; cur_fbo = framebuffer; glBindFramebuffer(target, framebuffer); pthread_mutex_unlock(&gl_lock); }
 void glBindRenderbuffer_locked(GLenum target, GLuint renderbuffer) { pthread_mutex_lock(&gl_lock); glBindRenderbuffer(target, renderbuffer); pthread_mutex_unlock(&gl_lock); }
 void glBindTexture_locked(GLenum target, GLuint texture) { pthread_mutex_lock(&gl_lock); glBindTexture(target, texture); pthread_mutex_unlock(&gl_lock); }
 void glBlendEquation_locked(GLenum mode) { pthread_mutex_lock(&gl_lock); glBlendEquation(mode); pthread_mutex_unlock(&gl_lock); }
@@ -22,13 +34,13 @@ void glBlendFuncSeparate_locked(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, G
 void glBufferData_locked(GLenum target, GLsizei size, const GLvoid *data, GLenum usage) { pthread_mutex_lock(&gl_lock); glBufferData(target, size, data, usage); pthread_mutex_unlock(&gl_lock); }
 void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) { pthread_mutex_lock(&gl_lock); glBufferSubData(target, offset, size, data); pthread_mutex_unlock(&gl_lock); }
 GLenum glCheckFramebufferStatus_locked(GLenum target) { pthread_mutex_lock(&gl_lock); GLenum r = glCheckFramebufferStatus(target); pthread_mutex_unlock(&gl_lock); return r; }
-void glClear_locked(GLbitfield mask) { pthread_mutex_lock(&gl_lock); glClear(mask); pthread_mutex_unlock(&gl_lock); }
-void glClearColor_locked(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) { pthread_mutex_lock(&gl_lock); glClearColor(red, green, blue, alpha); pthread_mutex_unlock(&gl_lock); }
+void glClear_locked(GLbitfield mask) { pthread_mutex_lock(&gl_lock); c_clears++; glClear(mask); pthread_mutex_unlock(&gl_lock); }
+void glClearColor_locked(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) { pthread_mutex_lock(&gl_lock); c_clear_r = red; c_clear_g = green; c_clear_b = blue; c_clear_a = alpha; glClearColor(red, green, blue, alpha); pthread_mutex_unlock(&gl_lock); }
 void glClearDepthf_locked(GLclampf depth) { pthread_mutex_lock(&gl_lock); glClearDepthf(depth); pthread_mutex_unlock(&gl_lock); }
 void glClearStencil_locked(GLint s) { pthread_mutex_lock(&gl_lock); glClearStencil(s); pthread_mutex_unlock(&gl_lock); }
 void glColorMask_locked(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) { pthread_mutex_lock(&gl_lock); glColorMask(red, green, blue, alpha); pthread_mutex_unlock(&gl_lock); }
 void glCompileShader_locked(GLuint shader) { pthread_mutex_lock(&gl_lock); glCompileShader_log(shader); pthread_mutex_unlock(&gl_lock); }
-void glCompressedTexImage2D_locked(GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) { pthread_mutex_lock(&gl_lock); glCompressedTexImage2D(target, level, internalformat, width, height, border, imageSize, data); pthread_mutex_unlock(&gl_lock); }
+void glCompressedTexImage2D_locked(GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) { pthread_mutex_lock(&gl_lock); c_texupload++; glCompressedTexImage2D(target, level, internalformat, width, height, border, imageSize, data); pthread_mutex_unlock(&gl_lock); }
 void glCopyTexImage2D_locked(GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border) { pthread_mutex_lock(&gl_lock); glCopyTexImage2D(target, level, internalformat, x, y, width, height, border); pthread_mutex_unlock(&gl_lock); }
 void glCopyTexSubImage2D_locked(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height); pthread_mutex_unlock(&gl_lock); }
 GLuint glCreateProgram_locked(void) { pthread_mutex_lock(&gl_lock); GLuint r = glCreateProgram(); pthread_mutex_unlock(&gl_lock); return r; }
@@ -45,8 +57,8 @@ void glDepthMask_locked(GLboolean flag) { pthread_mutex_lock(&gl_lock); glDepthM
 void glDepthRangef_locked(GLfloat nearVal, GLfloat farVal) { pthread_mutex_lock(&gl_lock); glDepthRangef(nearVal, farVal); pthread_mutex_unlock(&gl_lock); }
 void glDisable_locked(GLenum cap) { pthread_mutex_lock(&gl_lock); glDisable(cap); pthread_mutex_unlock(&gl_lock); }
 void glDisableVertexAttribArray_locked(GLuint index) { pthread_mutex_lock(&gl_lock); glDisableVertexAttribArray(index); pthread_mutex_unlock(&gl_lock); }
-void glDrawArrays_locked(GLenum mode, GLint first, GLsizei count) { pthread_mutex_lock(&gl_lock); glDrawArrays(mode, first, count); pthread_mutex_unlock(&gl_lock); }
-void glDrawElements_locked(GLenum mode, GLsizei count, GLenum type, const GLvoid *indices) { pthread_mutex_lock(&gl_lock); glDrawElements(mode, count, type, indices); pthread_mutex_unlock(&gl_lock); }
+void glDrawArrays_locked(GLenum mode, GLint first, GLsizei count) { pthread_mutex_lock(&gl_lock); c_draws++; if (cur_fbo == 0) c_draws_fbo0++; glDrawArrays(mode, first, count); pthread_mutex_unlock(&gl_lock); }
+void glDrawElements_locked(GLenum mode, GLsizei count, GLenum type, const GLvoid *indices) { pthread_mutex_lock(&gl_lock); c_draws++; if (cur_fbo == 0) c_draws_fbo0++; glDrawElements(mode, count, type, indices); pthread_mutex_unlock(&gl_lock); }
 void glEnable_locked(GLenum cap) { pthread_mutex_lock(&gl_lock); glEnable(cap); pthread_mutex_unlock(&gl_lock); }
 void glEnableVertexAttribArray_locked(GLuint index) { pthread_mutex_lock(&gl_lock); glEnableVertexAttribArray(index); pthread_mutex_unlock(&gl_lock); }
 void glFinish_locked(void) { pthread_mutex_lock(&gl_lock); glFinish(); pthread_mutex_unlock(&gl_lock); }
@@ -62,7 +74,7 @@ void glGenerateMipmap_locked(GLenum target) { pthread_mutex_lock(&gl_lock); glGe
 void glGetActiveAttrib_locked(GLuint prog, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name) { pthread_mutex_lock(&gl_lock); glGetActiveAttrib(prog, index, bufSize, length, size, type, name); pthread_mutex_unlock(&gl_lock); }
 void glGetActiveUniform_locked(GLuint prog, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name) { pthread_mutex_lock(&gl_lock); glGetActiveUniform(prog, index, bufSize, length, size, type, name); pthread_mutex_unlock(&gl_lock); }
 void glGetAttachedShaders_locked(GLuint prog, GLsizei maxCount, GLsizei *count, GLuint *shads) { pthread_mutex_lock(&gl_lock); glGetAttachedShaders(prog, maxCount, count, shads); pthread_mutex_unlock(&gl_lock); }
-GLint glGetAttribLocation_locked(GLuint prog, const GLchar *name) { pthread_mutex_lock(&gl_lock); GLint r = glGetAttribLocation(prog, name); pthread_mutex_unlock(&gl_lock); return r; }
+GLint glGetAttribLocation_locked(GLuint prog, const GLchar *name) { pthread_mutex_lock(&gl_lock); GLint r = glGetAttribLocation(prog, name); pthread_mutex_unlock(&gl_lock); if (r < 0) { static int n; if (n++ < 40) debugPrintf("attrib not found: prog %u \"%s\"\n", prog, name); } return r; }
 void glGetBooleanv_locked(GLenum pname, GLboolean *params) { pthread_mutex_lock(&gl_lock); glGetBooleanv(pname, params); pthread_mutex_unlock(&gl_lock); }
 void glGetBufferParameteriv_locked(GLenum target, GLenum pname, GLint *params) { pthread_mutex_lock(&gl_lock); glGetBufferParameteriv(target, pname, params); pthread_mutex_unlock(&gl_lock); }
 GLenum glGetError_locked(void) { pthread_mutex_lock(&gl_lock); GLenum r = glGetError(); pthread_mutex_unlock(&gl_lock); return r; }
@@ -75,7 +87,7 @@ void glGetShaderInfoLog_locked(GLuint handle, GLsizei maxLength, GLsizei *length
 void glGetShaderSource_locked(GLuint handle, GLsizei bufSize, GLsizei *length, GLchar *source) { pthread_mutex_lock(&gl_lock); glGetShaderSource(handle, bufSize, length, source); pthread_mutex_unlock(&gl_lock); }
 void glGetShaderiv_locked(GLuint handle, GLenum pname, GLint *params) { pthread_mutex_lock(&gl_lock); glGetShaderiv(handle, pname, params); pthread_mutex_unlock(&gl_lock); }
 const GLubyte * glGetString_locked(GLenum name) { pthread_mutex_lock(&gl_lock); const GLubyte * r = glGetString(name); pthread_mutex_unlock(&gl_lock); return r; }
-GLint glGetUniformLocation_locked(GLuint prog, const GLchar *name) { pthread_mutex_lock(&gl_lock); GLint r = glGetUniformLocation(prog, name); pthread_mutex_unlock(&gl_lock); return r; }
+GLint glGetUniformLocation_locked(GLuint prog, const GLchar *name) { pthread_mutex_lock(&gl_lock); GLint r = glGetUniformLocation(prog, name); pthread_mutex_unlock(&gl_lock); if (r < 0) { static int n; if (n++ < 60) debugPrintf("uniform not found: prog %u \"%s\"\n", prog, name); } return r; }
 void glGetVertexAttribPointerv_locked(GLuint index, GLenum pname, void **pointer) { pthread_mutex_lock(&gl_lock); glGetVertexAttribPointerv(index, pname, pointer); pthread_mutex_unlock(&gl_lock); }
 void glGetVertexAttribfv_locked(GLuint index, GLenum pname, GLfloat *params) { pthread_mutex_lock(&gl_lock); glGetVertexAttribfv(index, pname, params); pthread_mutex_unlock(&gl_lock); }
 void glGetVertexAttribiv_locked(GLuint index, GLenum pname, GLint *params) { pthread_mutex_lock(&gl_lock); glGetVertexAttribiv(index, pname, params); pthread_mutex_unlock(&gl_lock); }
@@ -101,7 +113,7 @@ void glStencilMask_locked(GLuint mask) { pthread_mutex_lock(&gl_lock); glStencil
 void glStencilMaskSeparate_locked(GLenum face, GLuint mask) { pthread_mutex_lock(&gl_lock); glStencilMaskSeparate(face, mask); pthread_mutex_unlock(&gl_lock); }
 void glStencilOp_locked(GLenum sfail, GLenum dpfail, GLenum dppass) { pthread_mutex_lock(&gl_lock); glStencilOp(sfail, dpfail, dppass); pthread_mutex_unlock(&gl_lock); }
 void glStencilOpSeparate_locked(GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass) { pthread_mutex_lock(&gl_lock); glStencilOpSeparate(face, sfail, dpfail, dppass); pthread_mutex_unlock(&gl_lock); }
-void glTexImage2D_locked(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *data) { pthread_mutex_lock(&gl_lock); glTexImage2D(target, level, internalFormat, width, height, border, format, type, data); pthread_mutex_unlock(&gl_lock); }
+void glTexImage2D_locked(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *data) { pthread_mutex_lock(&gl_lock); c_texupload++; glTexImage2D(target, level, internalFormat, width, height, border, format, type, data); pthread_mutex_unlock(&gl_lock); }
 void glTexParameterf_locked(GLenum target, GLenum pname, GLfloat param) { pthread_mutex_lock(&gl_lock); glTexParameterf(target, pname, param); pthread_mutex_unlock(&gl_lock); }
 void glTexParameteri_locked(GLenum target, GLenum pname, GLint param) { pthread_mutex_lock(&gl_lock); glTexParameteri(target, pname, param); pthread_mutex_unlock(&gl_lock); }
 void glTexParameteriv_locked(GLenum target, GLenum pname, GLint *param) { pthread_mutex_lock(&gl_lock); glTexParameteriv(target, pname, param); pthread_mutex_unlock(&gl_lock); }
@@ -125,7 +137,7 @@ void glUniform4iv_locked(GLint location, GLsizei count, const GLint *value) { pt
 void glUniformMatrix2fv_locked(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) { pthread_mutex_lock(&gl_lock); glUniformMatrix2fv(location, count, transpose, value); pthread_mutex_unlock(&gl_lock); }
 void glUniformMatrix3fv_locked(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) { pthread_mutex_lock(&gl_lock); glUniformMatrix3fv(location, count, transpose, value); pthread_mutex_unlock(&gl_lock); }
 void glUniformMatrix4fv_locked(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) { pthread_mutex_lock(&gl_lock); glUniformMatrix4fv(location, count, transpose, value); pthread_mutex_unlock(&gl_lock); }
-void glUseProgram_locked(GLuint program) { pthread_mutex_lock(&gl_lock); glUseProgram(program); pthread_mutex_unlock(&gl_lock); }
+void glUseProgram_locked(GLuint program) { pthread_mutex_lock(&gl_lock); c_useprog++; glUseProgram(program); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttrib1f_locked(GLuint index, GLfloat v0) { pthread_mutex_lock(&gl_lock); glVertexAttrib1f(index, v0); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttrib1fv_locked(GLuint index, const GLfloat *v) { pthread_mutex_lock(&gl_lock); glVertexAttrib1fv(index, v); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttrib2f_locked(GLuint index, GLfloat v0, GLfloat v1) { pthread_mutex_lock(&gl_lock); glVertexAttrib2f(index, v0, v1); pthread_mutex_unlock(&gl_lock); }
@@ -135,4 +147,4 @@ void glVertexAttrib3fv_locked(GLuint index, const GLfloat *v) { pthread_mutex_lo
 void glVertexAttrib4f_locked(GLuint index, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3) { pthread_mutex_lock(&gl_lock); glVertexAttrib4f(index, v0, v1, v2, v3); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttrib4fv_locked(GLuint index, const GLfloat *v) { pthread_mutex_lock(&gl_lock); glVertexAttrib4fv(index, v); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttribPointer_locked(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer) { pthread_mutex_lock(&gl_lock); glVertexAttribPointer(index, size, type, normalized, stride, pointer); pthread_mutex_unlock(&gl_lock); }
-void glViewport_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); glViewport(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
+void glViewport_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); c_viewport_w = width; c_viewport_h = height; glViewport(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
