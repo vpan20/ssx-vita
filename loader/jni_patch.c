@@ -8,6 +8,10 @@
 #include <string.h>
 #include <stdarg.h>
 #include "jni_patch.h"
+#ifndef SCREEN_W
+#define SCREEN_W 960
+#define SCREEN_H 544
+#endif
 #include "stubs.h"
 
 enum { CLASS_GENERIC = 1, CLASS_ACTIVITY, CLASS_EGL, CLASS_ASSETMGR, CLASS_STORAGE, CLASS_VIDEO, CLASS_TRUST5, CLASS_ARGS };
@@ -29,6 +33,32 @@ static const char *proc_arch(void)     { return "armeabi-v7a"; }
 static const char *locale_str(void)    { return "en_US"; }
 static float density(void)          { return 1.0f; }
 static int egl_ok(void)             { return 1; }
+// EGL queries that must return real values. Java int[] arrays here are our [len][data...] layout: data at arr+1.
+#define EGL_WIDTH 0x3057
+#define EGL_HEIGHT 0x3056
+static int egl_query_surface(uintptr_t obj, uintptr_t dpy, uintptr_t surf, int attrib, int *arr) {
+  int v = attrib == EGL_WIDTH ? SCREEN_W : attrib == EGL_HEIGHT ? SCREEN_H : 0;
+  if (arr && arr[0] > 0) arr[1] = v;
+  static int n; if (n++ < 8) debugPrintf("eglQuerySurface(attrib 0x%X) -> %d\n", attrib, v);
+  return 1;
+}
+static int egl_query_context(uintptr_t obj, uintptr_t dpy, uintptr_t ctx, int attrib, int *arr) {
+  if (arr && arr[0] > 0) arr[1] = attrib == 0x3098 /*EGL_CONTEXT_CLIENT_VERSION*/ ? 2 : 0;
+  return 1;
+}
+static int egl_choose_config(uintptr_t obj, uintptr_t dpy, int *attribs, uintptr_t *configs, int size, int *num) {
+  if (configs && configs[0] > 0) configs[1] = 1;   // one opaque config handle
+  if (num && num[0] > 0) num[1] = 1;
+  return 1;
+}
+static int egl_get_config_attrib(uintptr_t obj, uintptr_t dpy, uintptr_t cfg, int attrib, int *arr) {
+  int v = 0;
+  switch (attrib) { case 0x3024: case 0x3023: case 0x3022: case 0x3021: v = 8; break;  /* R,G,B,A size */
+                    case 0x3025: v = 24; break; /* depth */ case 0x3026: v = 8; break; /* stencil */
+                    case 0x3040: v = 4; break;  /* EGL_RENDERABLE_TYPE: OPENGL_ES2_BIT */ case 0x3033: v = 4; break; /* SURFACE_TYPE: WINDOW */ }
+  if (arr && arr[0] > 0) arr[1] = v;
+  return 1;
+}
 // Device identity — report as Xperia Z1 (C6903) so the game selects the config EA shipped for this exact device
 static const char *dev_model(void)   { return "C6903"; }
 static const char *dev_maker(void)   { return "Sony"; }
@@ -175,13 +205,13 @@ static int   notif_id(void)     { static int n = 1; return n++; }
 static jni_method methods[] = {
   // com/ea/blast/EglAndroidDelegate + javax/microedition/khronos/egl/EGL10
   { "eglGetDisplay",        (uintptr_t)ret1 }, { "eglInitialize",     (uintptr_t)egl_ok },
-  { "eglChooseConfig",      (uintptr_t)egl_ok }, { "eglGetConfigAttrib",(uintptr_t)egl_ok },
+  { "eglChooseConfig",      (uintptr_t)egl_choose_config }, { "eglGetConfigAttrib",(uintptr_t)egl_get_config_attrib },
   { "eglCreateContext",     (uintptr_t)ret1 }, { "eglCreateWindowSurface",(uintptr_t)ret1 },
   { "eglCreatePbufferSurface",(uintptr_t)ret1 },{ "eglMakeCurrent",   (uintptr_t)egl_ok },
   { "eglSwapBuffers",       (uintptr_t)egl_ok }, { "eglDestroySurface",(uintptr_t)egl_ok },
   { "eglDestroyContext",    (uintptr_t)egl_ok }, { "eglTerminate",     (uintptr_t)egl_ok },
-  { "eglQuerySurface",      (uintptr_t)egl_ok }, { "eglGetError",      (uintptr_t)ret0 },
-  { "eglQueryContext",      (uintptr_t)egl_ok },
+  { "eglQuerySurface",      (uintptr_t)egl_query_surface }, { "eglGetError",      (uintptr_t)ret0 },
+  { "eglQueryContext",      (uintptr_t)egl_query_context },
   { "eglQueryString",       (uintptr_t)lang },
   // Confirmed looked-up via GetMethodID in libgame.so (name+sig adjacency), not yet in table:
   { "exitApp",              (uintptr_t)retv }, { "openURL",           (uintptr_t)retv },
