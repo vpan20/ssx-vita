@@ -348,6 +348,8 @@ int main(int argc, char *argv[]) {
   };
   unsigned prev_buttons = 0; float prev_axis[4] = { 0 };
   int touching = 0; unsigned frame = 0;
+  extern int jni_video_play_pending; int video_done_at = 0;
+  fn_jni VideoDone = J("Java_com_ea_VideoPlayer_PlayerAndroid_OnCompletionNativeImpl");
   for (;;) {
     if (frame < 5 || frame % 300 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB)\n", frame, fi.size_user / 1024, fi.size_cdram / 1024); }
     frame++;
@@ -369,6 +371,11 @@ int main(int argc, char *argv[]) {
       if (td.reportNum > 0) { float x = td.report[0].x / 1920.0f * SCREEN_W, y = td.report[0].y / 1088.0f * SCREEN_H;
         Touch(fake_env, NULL, touching ? TOUCH_MOVE : TOUCH_DOWN, 1000, 0, FBITS(x), FBITS(y), 0); touching = 1; lx = x; ly = y; }
       else if (touching) { Touch(fake_env, NULL, TOUCH_UP, 1000, 0, FBITS(lx), FBITS(ly), 0); touching = 0; }
+    }
+    if (jni_video_play_pending && !video_done_at) video_done_at = frame + 30;   // let the player register, then "finish" the movie
+    if (video_done_at && frame >= (unsigned)video_done_at) {
+      video_done_at = 0; jni_video_play_pending = 0;
+      if (VideoDone) { for (int id = 0; id < 4; id++) VideoDone(fake_env, NULL, id, 0,0,0,0,0); debugPrintf("video: reported completion\n"); }
     }
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }

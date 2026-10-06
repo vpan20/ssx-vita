@@ -87,7 +87,11 @@ void glGetShaderInfoLog_locked(GLuint handle, GLsizei maxLength, GLsizei *length
 void glGetShaderSource_locked(GLuint handle, GLsizei bufSize, GLsizei *length, GLchar *source) { pthread_mutex_lock(&gl_lock); glGetShaderSource(handle, bufSize, length, source); pthread_mutex_unlock(&gl_lock); }
 void glGetShaderiv_locked(GLuint handle, GLenum pname, GLint *params) { pthread_mutex_lock(&gl_lock); glGetShaderiv(handle, pname, params); pthread_mutex_unlock(&gl_lock); }
 const GLubyte * glGetString_locked(GLenum name) { pthread_mutex_lock(&gl_lock); const GLubyte * r = glGetString(name); pthread_mutex_unlock(&gl_lock); return r; }
-GLint glGetUniformLocation_locked(GLuint prog, const GLchar *name) { pthread_mutex_lock(&gl_lock); GLint r = glGetUniformLocation(prog, name); pthread_mutex_unlock(&gl_lock); if (r < 0) { static int n; if (n++ < 60) debugPrintf("uniform not found: prog %u \"%s\"\n", prog, name); } return r; }
+GLint glGetUniformLocation_locked(GLuint prog, const GLchar *name) {
+  pthread_mutex_lock(&gl_lock); GLint r = glGetUniformLocation(prog, name);
+  // the GLSL pre-pass renames the sampler `tex` (a Cg built-in name) to `s_tex`; map lookups accordingly
+  if (r < 0 && !strncmp(name, "tex", 3) && (name[3] == 0 || name[3] == '[')) { char alt[80]; snprintf(alt, sizeof alt, "s_%s", name); r = glGetUniformLocation(prog, alt); }
+  pthread_mutex_unlock(&gl_lock); if (r < 0) { static int n; if (n++ < 60) debugPrintf("uniform not found: prog %u \"%s\"\n", prog, name); } return r; }
 void glGetVertexAttribPointerv_locked(GLuint index, GLenum pname, void **pointer) { pthread_mutex_lock(&gl_lock); glGetVertexAttribPointerv(index, pname, pointer); pthread_mutex_unlock(&gl_lock); }
 void glGetVertexAttribfv_locked(GLuint index, GLenum pname, GLfloat *params) { pthread_mutex_lock(&gl_lock); glGetVertexAttribfv(index, pname, params); pthread_mutex_unlock(&gl_lock); }
 void glGetVertexAttribiv_locked(GLuint index, GLenum pname, GLint *params) { pthread_mutex_lock(&gl_lock); glGetVertexAttribiv(index, pname, params); pthread_mutex_unlock(&gl_lock); }

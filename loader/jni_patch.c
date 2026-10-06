@@ -51,6 +51,8 @@ static int audio_write(uintptr_t obj, int *arr, int off, int len) {
   }
   return len;
 }
+int jni_video_play_pending;   // set when the game asks the Java video player to Play; main loop fires OnCompletion
+static void video_play(void) { jni_video_play_pending = 1; debugPrintf("video: Play requested -> will report completion\n"); }
 static void audio_play(void) {} static void audio_stop(void) { if (audio_port >= 0) { audio_fill = 0; } }   // all EGL10.* calls report success; VitaGL owns the context
 
 // ---- Android AssetManager emulation on top of DATA_PATH/obb ----------------------------
@@ -206,7 +208,7 @@ static jni_method methods[] = {
   { "RequestTierInfo",      (uintptr_t)retv },{ "RequestPurchase",   (uintptr_t)retv },
   { "RestorePurchaseItems", (uintptr_t)retv },{ "AuthenticatePurchase",(uintptr_t)retv },
   // com/ea/VideoPlayer/PlayerAndroid — videos are skipped: Play reports finished at once
-  { "Play",                 (uintptr_t)retv },{ "Stop",              (uintptr_t)retv },
+  { "Play",                 (uintptr_t)video_play },{ "Stop",            (uintptr_t)retv },
   { "IsPlaying",            (uintptr_t)ret0 },{ "IsFinished",        (uintptr_t)ret1 },{ "HasFinished", (uintptr_t)ret1 },
   { "GetPosition",          (uintptr_t)ret0 },{ "GetDuration",       (uintptr_t)ret1 },{ "GetState", (uintptr_t)ret0 },
   { "Prepare",              (uintptr_t)ret1 },{ "Load",              (uintptr_t)ret1 },{ "Pause", (uintptr_t)retv },
