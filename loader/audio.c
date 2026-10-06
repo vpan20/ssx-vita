@@ -94,7 +94,7 @@ void audio_bridge_install(so_module *game) {
   if (!submit) submit = game->text_base + 0x4f0528;   // local symbol (not in dynsym): use its offset from the symtab
   if (!submit) { debugPrintf("audio: SubmitAudio symbol not found — audio disabled\n"); return; }
 
-  SceUID th = sceKernelCreateThread("ssx_audio", audio_thread, 64, 0x10000, 0, 0, NULL)   // highest user priority: must drain faster than the mixer fills;
+  SceUID th = sceKernelCreateThread("ssx_audio", audio_thread, 64, 0x10000, 0, 0, NULL);   // highest user priority: must drain faster than the mixer fills
   if (th < 0) { debugPrintf("audio: create thread failed 0x%08X\n", th); return; }
   sceKernelStartThread(th, 0, NULL);
 
