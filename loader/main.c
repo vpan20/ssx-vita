@@ -284,12 +284,12 @@ int main(int argc, char *argv[]) {
   // 3. Graphics: VitaGL provides the GLES2 symbols in default_dynlib. Game shaders are GLSL ES → need
   //    VitaGL's runtime translator (vglInitWithCustomThreshold + shark) or precompiled CG. See README §Shaders.
   if (!file_exists("ur0:data/libshacccg.suprx")) fatal("libshacccg.suprx missing — run ShaRKBR33D");
-  vglSetShaderCachePath(DATA_PATH "/shader_cache");
-  glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default is 0x0; the game never calls glViewport explicitly   // compiled shaders persist here after the first run
+  vglSetShaderCachePath(DATA_PATH "/shader_cache");   // compiled shaders persist here after the first run
   sceIoMkdir(DATA_PATH "/shader_cache", 0777);
   debugPrintf("vitaGL init...\n");
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
   debugPrintf("vitaGL ok\n");
+  glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default viewport is 0x0 and the game never sets one; must come AFTER vglInit
 
   // 4. JNI boot sequence (order taken from Blast's MainActivity.onCreate / MainThread.run).
   //    Every entry is called with a full 8-word argument set; extras are harmless on ARM.
