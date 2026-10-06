@@ -51,11 +51,29 @@ static char *glsl_prepass(const char *src, int len) {
   }
   out[o] = 0; return out;
 }
+// rename `tex` to `s_tex` in GLSL source: `tex` is a built-in function name in Cg and gets dropped
+static char *rename_tex_sampler(const char *src, int len) {
+  char *out = malloc(len * 2 + 64); int o = 0, i = 0;
+  while (i < len) {
+    if (i + 3 <= len && memcmp(src + i, "tex", 3) == 0) {
+      int pre = i > 0 ? src[i-1] : 0; int post = (i+3 < len) ? src[i+3] : 0;
+      int id_pre = (pre >= 'a' && pre <= 'z') || (pre >= 'A' && pre <= 'Z') || (pre >= '0' && pre <= '9') || pre == '_';
+      int id_post = (post >= 'a' && post <= 'z') || (post >= 'A' && post <= 'Z') || (post >= '0' && post <= '9') || post == '_';
+      if (!id_pre && !id_post) { memcpy(out + o, "s_tex", 5); o += 5; i += 3; continue; }
+    }
+    out[o++] = src[i++];
+  }
+  out[o] = 0; return out;
+}
 void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *len) {
   if (n > 0 && src && src[0]) {
     int l = len && len[0] > 0 ? len[0] : (int)strlen(src[0]);
     int h = l > 380 ? 380 : l; memcpy(last_src_head, src[0], h); last_src_head[h] = 0;
-    if (n == 1) { char *fixed = glsl_prepass(src[0], l); const GLchar *one[1] = { fixed }; glShaderSource(sh, 1, one, NULL); free(fixed); return; }
+    if (n == 1) {
+      char *fixed = glsl_prepass(src[0], l);
+      char *final = rename_tex_sampler(fixed, strlen(fixed)); free(fixed);
+      const GLchar *one[1] = { final }; glShaderSource(sh, 1, one, NULL); free(final); return;
+    }
   }
   glShaderSource(sh, n, src, len);
 }
