@@ -60,9 +60,9 @@ static int egl_get_config_attrib(uintptr_t obj, uintptr_t dpy, uintptr_t cfg, in
   return 1;
 }
 // Device identity — report as Xperia Z1 (C6903) so the game selects the config EA shipped for this exact device
-static const char *dev_model(void)   { return "C6903"; }
-static const char *dev_maker(void)   { return "Sony"; }
-static const char *dev_chipset(void) { return "MSM8974"; }
+static const char *dev_model(void)   { return "XT910"; }     // Motorola Droid RAZR: 960x540 screen, so the game sizes its render target to the Vita
+static const char *dev_maker(void)   { return "motorola"; }
+static const char *dev_chipset(void) { return "OMAP4430"; }
 static const char *dev_fw(void)      { return "4.4.4"; }
 static const char *dev_uid(void)     { return "0123456789abcdef"; }
 static const char *dev_fp(void)      { return "neon vfpv3"; }
@@ -193,7 +193,7 @@ static const struct { const char *n; int id; } special[] = {
 
 
 // ---- full Blast delegate surface (extracted from the binary's GetMethodId call sites) ----
-static float f_dpi(void)        { return 220.0f; }
+static float f_dpi(void)        { return 256.0f; }
 static float f_battery(void)    { return 1.0f; }
 static int  *empty_str_array(void) { static int a[1] = { 0 }; return a; }
 static int   gl_view(void)      { return 1; }

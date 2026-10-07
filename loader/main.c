@@ -55,18 +55,19 @@ static void *make_trampoline(uintptr_t target) {
   // Use the page-rounding slack at the end of the game's own RX block (memsz 0x166C634, block 0x166D000): ~2.4KB free.
   if (!tramp_pool) tramp_pool = (uint8_t *)(game_mod.text_base + 0x166C640);
   if (tramp_used + 16 > 0x9C0) { debugPrintf("trampoline pool full\n"); return NULL; }
-  uint32_t i0 = *(uint32_t *)target, i1 = *(uint32_t *)(target + 4);
+  uint32_t ins[2] = { *(uint32_t *)target, *(uint32_t *)(target + 4) }, lit[2] = { 0, 0 }; int anylit = 0;
   uint8_t *at = tramp_pool + tramp_used;
-  if ((i0 & 0x0F7F0000) == 0x051F0000) {            // ldr rX, [pc, #imm]: re-emit as a load from an embedded literal
-    uint32_t imm = i0 & 0xFFF, up = (i0 >> 23) & 1, lit = *(uint32_t *)(target + 8 + (up ? imm : -imm));
-    // w0: ldr rX,[pc,#8] (-> w4)  w1: orig insn1  w2: ldr pc,[pc,#-4] (-> w3)  w3: target+8  w4: literal
-    uint32_t t[5] = { (i0 & 0xFFFFF000) | 0x008 | (1u << 23), i1, 0xe51ff004, (uint32_t)(target + 8), lit };
-    kuKernelCpuUnrestrictedMemcpy(at, t, sizeof t); kuKernelFlushCaches(at, 20); tramp_used += 20; return at;
+  for (int k = 0; k < 2; k++) {
+    uint32_t w = ins[k];
+    if ((w & 0x0F7F0000) == 0x051F0000) {            // ldr rX, [pc, #imm] -> ldr rX, [pc, #8]: literal sits 4 words after the instruction
+      uint32_t imm = w & 0xFFF, up = (w >> 23) & 1; lit[k] = *(uint32_t *)(target + 4 * k + 8 + (up ? imm : -imm));
+      ins[k] = (w & 0xFFFFF000) | 0x008 | (1u << 23); anylit = 1;
+    }
   }
-  uint32_t t[4] = { i0, i1, 0xe51ff004, (uint32_t)(target + 8) };
-  tramp_used += 16;
-  kuKernelCpuUnrestrictedMemcpy(at, t, sizeof t);
-  kuKernelFlushCaches(at, 16);
+  // w0: insn0  w1: insn1  w2: ldr pc,[pc,#-4]  w3: target+8  w4: lit0  w5: lit1
+  uint32_t t[6] = { ins[0], ins[1], 0xe51ff004, (uint32_t)(target + 8), lit[0], lit[1] };
+  int n = anylit ? 24 : 16;
+  kuKernelCpuUnrestrictedMemcpy(at, t, n); kuKernelFlushCaches(at, n); tramp_used += n;
   return at;
 }
 #define HOOK(off, fn, orig_var) do { uintptr_t a = game_mod.text_base + (off); orig_var = make_trampoline(a); if (orig_var) hook_addr(a, (uintptr_t)fn); debugPrintf("hook " #fn " @%p tramp=%p\n", (void *)a, orig_var); } while (0)
@@ -237,7 +238,16 @@ static void hook_UnpackUpdate(void) {
   if (stage_log++ < 200) { mailbox_state(s, sizeof s); debugPrintf("UnpackUpdate out%s\n", s); }
 }
 
+// MemoryFramework::ErrorHandlers::OutOfMemory(const MemoryFailure&): log what ran out before the engine stops
+static void (*orig_OutOfMemory)(void *);
+static void hook_OutOfMemory(void *mf) {
+  uint32_t *w = mf;
+  debugPrintf("OUT OF MEMORY: words %08X %08X %08X %08X %08X %08X %08X %08X\n", w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]);
+  for (int i = 0; i < 8; i++) if (w[i] > 0x94000000 && w[i] < 0x95900000) debugPrintf("  str[%d]=%.60s\n", i, (const char *)w[i]);
+  orig_OutOfMemory(mf);
+}
 static void install_hooks(void) {
+  HOOK(0x14b888, hook_OutOfMemory, orig_OutOfMemory);
   HOOK(0x6438c0, hook_LoadingUpdate, orig_LoadingUpdate);
   HOOK(0x642b78, hook_UnpackUpdate, orig_UnpackUpdate);
   HOOK(0x483318, hook_SemPost, orig_SemPost);
