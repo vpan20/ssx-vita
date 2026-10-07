@@ -113,7 +113,7 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
       uint32_t *vec = *(uint32_t **)(GALLOC + 0x30);
       if (vec) { uint32_t *b = (uint32_t *)vec[0], *e = (uint32_t *)vec[1];
         for (uint32_t *p = b; p < e; p++) { uint32_t *c = (uint32_t *)*p; if (c && (void *)c[3] == asset) { have += c[5]; chunks++; if (c[6] > total) total = c[6]; } } }
-      if (!chunks || have >= total || waited >= 40000) break;
+      if (!chunks || have >= total || have >= 1024 * 1024 || waited >= 4000) break;   // engine streams >1MB files through a 1MB window; don't fight it
       sceKernelDelayThread(500); waited++;
     }
     static int n; if (n++ < 60) debugPrintf("chunks for %s: %u of %u bytes in %u chunk(s) (waited %d ms)\n", nm ? nm : "?", have, total, chunks, waited / 2);
