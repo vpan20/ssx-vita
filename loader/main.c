@@ -322,6 +322,13 @@ int main(int argc, char *argv[]) {
   CALL("Java_com_ea_blast_MainActivity_NativeOnWindowFocusChanged", 1,0,0,0,0,0);
   CALL("Java_com_ea_blast_MainThread_NativeOnSurfaceCreated", 1,0,0,0,0,0);
   CALL("Java_com_ea_blast_MainThread_NativeOnSurfaceChanged", SCREEN_W, SCREEN_H, 0,0,0,0);
+  // SSX's own Activity fires these in addition to the Blast ones; without ContextReset the renderer treats the GL context as lost
+  { fn_jni f;
+    if ((f = J("Java_com_ea_ssx_MainActivity_NativeOnContextResetEvent"))) { f(fake_env, (void *)&fake_activity, 0,0,0,0,0,0); debugPrintf("NativeOnContextResetEvent ok\n"); }
+    if ((f = J("Java_com_ea_ssx_MainActivity_NativeOnResumeEvent")))       { f(fake_env, (void *)&fake_activity, 0,0,0,0,0,0); debugPrintf("NativeOnResumeEvent ok\n"); }
+    if ((f = J("Java_com_ea_ssx_MainActivity_ResumeAudio")))               { f(fake_env, (void *)&fake_activity, 0,0,0,0,0,0); debugPrintf("ResumeAudio ok\n"); }
+    if ((f = J("Java_com_ea_ssx_MainActivity_ResumeVideo")))               { f(fake_env, (void *)&fake_activity, 0,0,0,0,0,0); debugPrintf("ResumeVideo ok\n"); }
+  }
   fn_jni DrawFrame = J("Java_com_ea_blast_MainThread_NativeOnDrawFrame");
   fn_jni Touch = J("Java_com_ea_blast_TouchSurfaceAndroid_NativeOnPointerEvent");
   // Decoded from TouchScreen::HandleMessage: (action, tag=1000 raw pointer, pointerId, x as float bits, y as float bits)
