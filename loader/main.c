@@ -103,16 +103,20 @@ static int hook_TranslateStream(void *parent, void *asset, void *stream, int fla
     uint32_t *w = asset; const char *nm = (const char *)w[6]; uint32_t *sw = stream;
     static int n; if (n++ < 30) debugPrintf("TranslateStream: %s asset=%p size=%u/%u streamsize=%u flag=%d\n", nm ? nm : "?", asset, w[2], w[3], sw ? sw[4] : 0, flag);
   }
-  // The engine's contract: a chunk reaches the translator only when fully filled. If the loader thread is still
-  // filling it (filled < total), wait here rather than let ChunkStream::Read run dry and recurse.
+  // Large files arrive as several chunks (256KB..512KB each). The translator reads them in sequence from the translate
+  // vector, so every chunk of this asset must be present before translation starts. Wait until the sum of the chunk
+  // sizes queued for this asset reaches the file size (chunk[6] = total), up to 20s.
   {
-    uint32_t *vec = *(uint32_t **)(GALLOC + 0x30); uint32_t *chunk = NULL;
-    if (vec) { uint32_t *b = (uint32_t *)vec[0], *e = (uint32_t *)vec[1]; for (uint32_t *p = b; p < e; p++) { uint32_t *c = (uint32_t *)*p; if (c && (void *)c[3] == asset) { chunk = c; break; } } }
-    if (chunk) {
-      int waited = 0;
-      while (chunk[5] < chunk[6] && waited < 20000) { sceKernelDelayThread(500); waited++; }
-      static int n; if (n++ < 40) debugPrintf("chunk for %s: filled %u / %u (waited %d ms)\n", nm ? nm : "?", chunk[5], chunk[6], waited / 2);
-    } else { static int n; if (n++ < 20) debugPrintf("chunk for %s: not in translate vector\n", nm ? nm : "?"); }
+    uint32_t total = 0, have = 0, chunks = 0; int waited = 0;
+    for (;;) {
+      have = 0; chunks = 0; total = 0;
+      uint32_t *vec = *(uint32_t **)(GALLOC + 0x30);
+      if (vec) { uint32_t *b = (uint32_t *)vec[0], *e = (uint32_t *)vec[1];
+        for (uint32_t *p = b; p < e; p++) { uint32_t *c = (uint32_t *)*p; if (c && (void *)c[3] == asset) { have += c[5]; chunks++; if (c[6] > total) total = c[6]; } } }
+      if (!chunks || have >= total || waited >= 40000) break;
+      sceKernelDelayThread(500); waited++;
+    }
+    static int n; if (n++ < 60) debugPrintf("chunks for %s: %u of %u bytes in %u chunk(s) (waited %d ms)\n", nm ? nm : "?", have, total, chunks, waited / 2);
   }
   int r = orig_TranslateStream(parent, asset, stream, flag);
   { static int n2; if (n2++ < 30) debugPrintf("  -> %d\n", r); }
