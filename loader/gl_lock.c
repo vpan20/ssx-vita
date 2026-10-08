@@ -7,11 +7,14 @@
 static pthread_mutex_t gl_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 void debugPrintf(const char *fmt, ...);
 // per-frame GL activity summary (printed by main loop via gl_frame_summary)
 static unsigned c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
 static float c_clear_r, c_clear_g, c_clear_b, c_clear_a;
 void gl_frame_summary(unsigned frame) {
+  if (frame < 12 || frame % 300 == 0)
+    debugPrintf("vitaGL pools: vram free=%uKB ram free=%uKB\n", (unsigned)vglMemFree(VGL_MEM_VRAM) / 1024, (unsigned)vglMemFree(VGL_MEM_RAM) / 1024);
   if (frame < 12 || frame % 300 == 0)
     debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
       frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
@@ -157,9 +160,24 @@ void glViewport_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthrea
 #include <string.h>
 static void *mapped_ptr[2];   // [0]=GL_ARRAY_BUFFER, [1]=GL_ELEMENT_ARRAY_BUFFER
 static int map_idx(GLenum t) { return t == 0x8893 /*ELEMENT_ARRAY*/ ? 1 : 0; }
-static void *glMapBufferOES_locked(GLenum t, GLenum a) { pthread_mutex_lock(&gl_lock); void *r = glMapBuffer(t, a); mapped_ptr[map_idx(t)] = r; pthread_mutex_unlock(&gl_lock); return r; }
+static void *staging[2]; static GLsizeiptr staging_sz[2];
+static void *glMapBufferOES_locked(GLenum t, GLenum a) {
+  pthread_mutex_lock(&gl_lock); void *r = glMapBuffer(t, a);
+  if (!r) {   // VitaGL buffer has no storage (pool allocation failed): hand Scaleform a CPU staging block, upload on unmap
+    GLint sz = 0; glGetBufferParameteriv(t, GL_BUFFER_SIZE, &sz); int i = map_idx(t);
+    if (sz > staging_sz[i]) { free(staging[i]); staging[i] = malloc(sz); staging_sz[i] = sz; }
+    r = staging[i];
+    static int c; if (c++ < 20) debugPrintf("glMapBuffer returned NULL (size %d, vram free %uKB ram free %uKB) -> staging\n", sz, (unsigned)vglMemFree(VGL_MEM_VRAM) / 1024, (unsigned)vglMemFree(VGL_MEM_RAM) / 1024);
+  }
+  mapped_ptr[map_idx(t)] = r; pthread_mutex_unlock(&gl_lock); return r;
+}
 static void glGetBufferPointervOES_impl(GLenum t, GLenum pname, void **params) { if (params) *params = mapped_ptr[map_idx(t)]; }
-static GLboolean glUnmapBufferOES_locked(GLenum t) { pthread_mutex_lock(&gl_lock); GLboolean r = glUnmapBuffer(t); mapped_ptr[map_idx(t)] = NULL; pthread_mutex_unlock(&gl_lock); return r; }
+static GLboolean glUnmapBufferOES_locked(GLenum t) {
+  pthread_mutex_lock(&gl_lock); int i = map_idx(t); GLboolean r;
+  if (mapped_ptr[i] == staging[i] && staging[i]) { glBufferSubData(t, 0, staging_sz[i], staging[i]); r = GL_TRUE; }
+  else r = glUnmapBuffer(t);
+  mapped_ptr[i] = NULL; pthread_mutex_unlock(&gl_lock); return r;
+}
 static void *glMapBufferRangeEXT_locked(GLenum t, GLintptr o, GLsizeiptr l, GLbitfield a) { pthread_mutex_lock(&gl_lock); void *r = glMapBufferRange(t, o, l, a); mapped_ptr[map_idx(t)] = r; pthread_mutex_unlock(&gl_lock); return r; }
 static void glFlushMappedBufferRangeEXT_noop(GLenum t, GLintptr o, GLsizeiptr l) { (void)t; (void)o; (void)l; }
 static void glBindVertexArrayOES_locked(GLuint a) { pthread_mutex_lock(&gl_lock); glBindVertexArray(a); pthread_mutex_unlock(&gl_lock); }
