@@ -172,6 +172,7 @@ void *malloc_log(size_t n) { void *p = malloc(n); if (n >= 0x100000 || !p) debug
 void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
 void *memalign_log(size_t al, size_t n) { void *p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
 // GL wrappers (gl_lock.c)
+extern void *egl_get_proc_address_shim(const char *);
 extern void glActiveTexture_locked();
 extern void glAttachShader_locked();
 extern void glBindAttribLocation_locked();
@@ -396,7 +397,7 @@ so_default_dynlib default_dynlib[] = {
   { "cosf", (uintptr_t)&cosf },
   { "cosh", (uintptr_t)&cosh },
   { "difftime", (uintptr_t)&difftime },
-  { "eglGetProcAddress", (uintptr_t)&eglGetProcAddress },
+  { "eglGetProcAddress", (uintptr_t)&egl_get_proc_address_shim },
   { "execv", (uintptr_t)&execv },
   { "exit", (uintptr_t)&exit },
   { "exp", (uintptr_t)&exp },

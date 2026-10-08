@@ -152,3 +152,27 @@ void glVertexAttrib4f_locked(GLuint index, GLfloat v0, GLfloat v1, GLfloat v2, G
 void glVertexAttrib4fv_locked(GLuint index, const GLfloat *v) { pthread_mutex_lock(&gl_lock); glVertexAttrib4fv(index, v); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttribPointer_locked(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer) { pthread_mutex_lock(&gl_lock); glVertexAttribPointer(index, size, type, normalized, stride, pointer); pthread_mutex_unlock(&gl_lock); }
 void glViewport_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); c_viewport_w = width; c_viewport_h = height; glViewport(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
+
+// ---- eglGetProcAddress shim: map ES extension names Scaleform asks for onto VitaGL's core implementations, locked ----
+#include <string.h>
+static void *glMapBufferOES_locked(GLenum t, GLenum a) { pthread_mutex_lock(&gl_lock); void *r = glMapBuffer(t, a); pthread_mutex_unlock(&gl_lock); return r; }
+static GLboolean glUnmapBufferOES_locked(GLenum t) { pthread_mutex_lock(&gl_lock); GLboolean r = glUnmapBuffer(t); pthread_mutex_unlock(&gl_lock); return r; }
+static void *glMapBufferRangeEXT_locked(GLenum t, GLintptr o, GLsizeiptr l, GLbitfield a) { pthread_mutex_lock(&gl_lock); void *r = glMapBufferRange(t, o, l, a); pthread_mutex_unlock(&gl_lock); return r; }
+static void glFlushMappedBufferRangeEXT_noop(GLenum t, GLintptr o, GLsizeiptr l) { (void)t; (void)o; (void)l; }
+static void glBindVertexArrayOES_locked(GLuint a) { pthread_mutex_lock(&gl_lock); glBindVertexArray(a); pthread_mutex_unlock(&gl_lock); }
+static void glGenVertexArraysOES_locked(GLsizei n, GLuint *a) { pthread_mutex_lock(&gl_lock); glGenVertexArrays(n, a); pthread_mutex_unlock(&gl_lock); }
+static void glDeleteVertexArraysOES_locked(GLsizei n, const GLuint *a) { pthread_mutex_lock(&gl_lock); glDeleteVertexArrays(n, a); pthread_mutex_unlock(&gl_lock); }
+static void glDiscardFramebufferEXT_noop(GLenum t, GLsizei n, const GLenum *a) { (void)t; (void)n; (void)a; }
+void *egl_get_proc_address_shim(const char *name) {
+  static const struct { const char *n; void *f; } tbl[] = {
+    { "glMapBufferOES", (void *)glMapBufferOES_locked }, { "glUnmapBufferOES", (void *)glUnmapBufferOES_locked },
+    { "glMapBufferRangeEXT", (void *)glMapBufferRangeEXT_locked }, { "glFlushMappedBufferRangeEXT", (void *)glFlushMappedBufferRangeEXT_noop },
+    { "glBindVertexArrayOES", (void *)glBindVertexArrayOES_locked }, { "glGenVertexArraysOES", (void *)glGenVertexArraysOES_locked },
+    { "glDeleteVertexArraysOES", (void *)glDeleteVertexArraysOES_locked }, { "glDiscardFramebufferEXT", (void *)glDiscardFramebufferEXT_noop },
+  };
+  void *r = NULL;
+  for (unsigned i = 0; i < sizeof tbl / sizeof tbl[0]; i++) if (!strcmp(name, tbl[i].n)) { r = tbl[i].f; break; }
+  if (!r) r = vglGetProcAddress(name);
+  static int c; if (c++ < 40) debugPrintf("eglGetProcAddress(%s) -> %p\n", name, r);
+  return r;
+}

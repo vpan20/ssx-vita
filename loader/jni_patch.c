@@ -104,9 +104,9 @@ static void asset_path(char *out, size_t n, const char *name) {
 // dropped. Applied to the in-memory copy only; the file on the card is untouched.
 static const struct { const char *name; const char *size; } memcfg_rules[] = {
   { "AUDIODATA_GEN", "14M" },   { "GAMEPLAY_GEN", "12M" },     { "GAMEWORLD_GEN", "12M" },
-  { "GLOBAL_GEN", "24M" },      { "RENDER_GEN", "42M" },      { "STL_GEN", "8M" },           { "FE_GEN", "8M" },
-  { "FE_SFGFX_GEN_A", "24M" },  { "FE_SFGFX_GEN_B", "3M" },    { "FE_SFGFX_AS_SBA", "2M" },
-  { "FE_SFGFX_ASCRIPT", "6M" }, { "FE_SFGFX_REN_SBA", "4M" },  { "FE_SFGFX_RENDER", "5M" },
+  { "GLOBAL_GEN", "24M" },      { "RENDER_GEN", "24M" },      { "STL_GEN", "8M" },           { "FE_GEN", "9M" },
+  { "FE_SFGFX_GEN_A", "35M" },  { "FE_SFGFX_GEN_B", "3M" },    { "FE_SFGFX_AS_SBA", "2M" },
+  { "FE_SFGFX_ASCRIPT", "9M" }, { "FE_SFGFX_REN_SBA", "4M" },  { "FE_SFGFX_RENDER", "8M" },
   { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "11M" },  { "GAMEWORLD_SLOTALLOC", "8M" },
   { "ASSETSTREAM_READBUF", "5M" }, { "AUDIO_RWAC", "3M" },
 };
