@@ -155,9 +155,12 @@ void glViewport_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthrea
 
 // ---- eglGetProcAddress shim: map ES extension names Scaleform asks for onto VitaGL's core implementations, locked ----
 #include <string.h>
-static void *glMapBufferOES_locked(GLenum t, GLenum a) { pthread_mutex_lock(&gl_lock); void *r = glMapBuffer(t, a); pthread_mutex_unlock(&gl_lock); return r; }
-static GLboolean glUnmapBufferOES_locked(GLenum t) { pthread_mutex_lock(&gl_lock); GLboolean r = glUnmapBuffer(t); pthread_mutex_unlock(&gl_lock); return r; }
-static void *glMapBufferRangeEXT_locked(GLenum t, GLintptr o, GLsizeiptr l, GLbitfield a) { pthread_mutex_lock(&gl_lock); void *r = glMapBufferRange(t, o, l, a); pthread_mutex_unlock(&gl_lock); return r; }
+static void *mapped_ptr[2];   // [0]=GL_ARRAY_BUFFER, [1]=GL_ELEMENT_ARRAY_BUFFER
+static int map_idx(GLenum t) { return t == 0x8893 /*ELEMENT_ARRAY*/ ? 1 : 0; }
+static void *glMapBufferOES_locked(GLenum t, GLenum a) { pthread_mutex_lock(&gl_lock); void *r = glMapBuffer(t, a); mapped_ptr[map_idx(t)] = r; pthread_mutex_unlock(&gl_lock); return r; }
+static void glGetBufferPointervOES_impl(GLenum t, GLenum pname, void **params) { if (params) *params = mapped_ptr[map_idx(t)]; }
+static GLboolean glUnmapBufferOES_locked(GLenum t) { pthread_mutex_lock(&gl_lock); GLboolean r = glUnmapBuffer(t); mapped_ptr[map_idx(t)] = NULL; pthread_mutex_unlock(&gl_lock); return r; }
+static void *glMapBufferRangeEXT_locked(GLenum t, GLintptr o, GLsizeiptr l, GLbitfield a) { pthread_mutex_lock(&gl_lock); void *r = glMapBufferRange(t, o, l, a); mapped_ptr[map_idx(t)] = r; pthread_mutex_unlock(&gl_lock); return r; }
 static void glFlushMappedBufferRangeEXT_noop(GLenum t, GLintptr o, GLsizeiptr l) { (void)t; (void)o; (void)l; }
 static void glBindVertexArrayOES_locked(GLuint a) { pthread_mutex_lock(&gl_lock); glBindVertexArray(a); pthread_mutex_unlock(&gl_lock); }
 static void glGenVertexArraysOES_locked(GLsizei n, GLuint *a) { pthread_mutex_lock(&gl_lock); glGenVertexArrays(n, a); pthread_mutex_unlock(&gl_lock); }
@@ -166,7 +169,7 @@ static void glDiscardFramebufferEXT_noop(GLenum t, GLsizei n, const GLenum *a) {
 void *egl_get_proc_address_shim(const char *name) {
   static const struct { const char *n; void *f; } tbl[] = {
     { "glMapBufferOES", (void *)glMapBufferOES_locked }, { "glUnmapBufferOES", (void *)glUnmapBufferOES_locked },
-    { "glMapBufferRangeEXT", (void *)glMapBufferRangeEXT_locked }, { "glFlushMappedBufferRangeEXT", (void *)glFlushMappedBufferRangeEXT_noop },
+    { "glMapBufferRangeEXT", (void *)glMapBufferRangeEXT_locked }, { "glGetBufferPointervOES", (void *)glGetBufferPointervOES_impl }, { "glFlushMappedBufferRangeEXT", (void *)glFlushMappedBufferRangeEXT_noop },
     { "glBindVertexArrayOES", (void *)glBindVertexArrayOES_locked }, { "glGenVertexArraysOES", (void *)glGenVertexArraysOES_locked },
     { "glDeleteVertexArraysOES", (void *)glDeleteVertexArraysOES_locked }, { "glDiscardFramebufferEXT", (void *)glDiscardFramebufferEXT_noop },
   };
