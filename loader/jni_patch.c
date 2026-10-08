@@ -132,6 +132,10 @@ static char *rewrite_memcfg(char *buf, long *size) {
 }
 static AssetStream *asset_open(const char *name) {
   char p[512]; asset_path(p, sizeof p, name);
+  size_t nl0 = strlen(name);
+  if (nl0 > 4 && !strcmp(name + nl0 - 4, ".mp4")) {   // no video decode on Vita: report movies missing so the boot flow skips them
+    debugPrintf("asset open %s: movie skipped (FileNotFoundException)\n", name); pending_exception = 1; return NULL;
+  }
   SceUID fd = sceIoOpen(p, SCE_O_RDONLY, 0);
   if (fd < 0) {
     size_t pl = strlen(p);

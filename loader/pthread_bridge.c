@@ -188,8 +188,9 @@ static SceUID ksem_get(int *slot) {
 }
 int sem_init_bridge(int *slot, int pshared, unsigned value) { *slot = (int)value; ksem_get(slot); return 0; }
 int sem_destroy_bridge(int *slot) { if ((unsigned)*slot >= 0x10000) { sceKernelDeleteSema((SceUID)*slot); *slot = 0; } return 0; }
-int sem_post_bridge(int *slot)    { return sceKernelSignalSema(ksem_get(slot), 1) < 0 ? -1 : 0; }
-int sem_wait_bridge(int *slot)    { return sceKernelWaitSema(ksem_get(slot), 1, NULL) < 0 ? -1 : 0; }
+static int ksem_bad(SceUID id, const char *op) { if (id <= 0) { static int n; if (n++ < 20) debugPrintf("BRIDGE: bad semaphore handle in %s (caller %p)\n", op, __builtin_return_address(0)); errno = EINVAL; return 1; } return 0; }
+int sem_post_bridge(int *slot)    { SceUID id = ksem_get(slot); if (ksem_bad(id, "sem_post")) return -1; return sceKernelSignalSema(id, 1) < 0 ? -1 : 0; }
+int sem_wait_bridge(int *slot)    { SceUID id = ksem_get(slot); if (ksem_bad(id, "sem_wait")) return -1; return sceKernelWaitSema(id, 1, NULL) < 0 ? -1 : 0; }
 int sem_trywait_bridge(int *slot) { SceUInt t = 0; if (sceKernelWaitSema(ksem_get(slot), 1, &t) < 0) { errno = EAGAIN; return -1; } return 0; }
 int sem_timedwait_bridge(int *slot, const struct timespec *ts) {
   SceUID id = ksem_get(slot);

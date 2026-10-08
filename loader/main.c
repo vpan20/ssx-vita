@@ -18,7 +18,7 @@
 #define SCREEN_H 544
 #define LOAD_ADDR_GAME   0x94000000
 #define LOAD_ADDR_GNUSTL 0x9C000000   // libgame.so is ~40MB mapped; keep gnustl clear of it
-#define MEMORY_NEWLIB_MB 264
+#define MEMORY_NEWLIB_MB 244   // game heaps total ~218MB + 16MB mmap; the rest of RAM goes to VitaGL's pool
 #define MEMORY_VITAGL_MB 16          // tune: game streams textures from .big caches
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
@@ -301,7 +301,7 @@ int main(int argc, char *argv[]) {
   vglSetShaderCachePath(DATA_PATH "/shader_cache");   // compiled shaders persist here after the first run
   sceIoMkdir(DATA_PATH "/shader_cache", 0777);
   debugPrintf("vitaGL init...\n");
-  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
+  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 4 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave only 4MB of RAM outside VitaGL
   debugPrintf("vitaGL ok\n");
   glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default viewport is 0x0 and the game never sets one; must come AFTER vglInit
 

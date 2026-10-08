@@ -63,7 +63,7 @@ static void ring_read_chunk(int16_t *dst) {
 
 static int audio_thread(SceSize args, void *argp) {
   (void)args; (void)argp;
-  int port = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_MAIN, AUDIO_GRAIN, AUDIO_FREQ,
+  int port = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_BGM, AUDIO_GRAIN, AUDIO_FREQ,   // MAIN only accepts 48000 Hz; BGM accepts 44100
                                  AUDIO_CHANNELS == 2 ? SCE_AUDIO_OUT_MODE_STEREO : SCE_AUDIO_OUT_MODE_MONO);
   if (port < 0) { debugPrintf("audio: sceAudioOutOpenPort failed 0x%08X\n", port); return -1; }
   int vol[2] = { SCE_AUDIO_VOLUME_0DB, SCE_AUDIO_VOLUME_0DB };
