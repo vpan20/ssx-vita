@@ -18,7 +18,7 @@
 #define SCREEN_H 544
 #define LOAD_ADDR_GAME   0x94000000
 #define LOAD_ADDR_GNUSTL 0x9C000000   // libgame.so is ~40MB mapped; keep gnustl clear of it
-#define MEMORY_NEWLIB_MB 264   // reverted 244->264: 244 drove the game heap negative (free user=-1024KB). Movie-skip is the real VRAM fix, not shrinking newlib.
+#define MEMORY_NEWLIB_MB 264   // 264 not 244: #111 proved 244 drives the game heap negative (free user=-1024KB); 264 gave +2048KB. Kept across loader-12 merge.
 #define MEMORY_VITAGL_MB 16          // tune: game streams textures from .big caches
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
@@ -301,7 +301,7 @@ int main(int argc, char *argv[]) {
   vglSetShaderCachePath(DATA_PATH "/shader_cache");   // compiled shaders persist here after the first run
   sceIoMkdir(DATA_PATH "/shader_cache", 0777);
   debugPrintf("vitaGL init...\n");
-  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 16MB RAM outside VitaGL for thread stacks; 4MB starved pthread_create (EAGAIN)
+  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 20 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 20MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc must fit
   debugPrintf("vitaGL ok\n");
   glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default viewport is 0x0 and the game never sets one; must come AFTER vglInit
 

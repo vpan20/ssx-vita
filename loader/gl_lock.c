@@ -34,7 +34,7 @@ void glBlendEquation_locked(GLenum mode) { pthread_mutex_lock(&gl_lock); glBlend
 void glBlendEquationSeparate_locked(GLenum modeRGB, GLenum modeAlpha) { pthread_mutex_lock(&gl_lock); glBlendEquationSeparate(modeRGB, modeAlpha); pthread_mutex_unlock(&gl_lock); }
 void glBlendFunc_locked(GLenum sfactor, GLenum dfactor) { pthread_mutex_lock(&gl_lock); glBlendFunc(sfactor, dfactor); pthread_mutex_unlock(&gl_lock); }
 void glBlendFuncSeparate_locked(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) { pthread_mutex_lock(&gl_lock); glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha); pthread_mutex_unlock(&gl_lock); }
-void glBufferData_locked(GLenum target, GLsizei size, const GLvoid *data, GLenum usage) { pthread_mutex_lock(&gl_lock); glBufferData(target, size, data, usage); pthread_mutex_unlock(&gl_lock); }
+void glBufferData_locked(GLenum target, GLsizei size, const GLvoid *data, GLenum usage) { pthread_mutex_lock(&gl_lock); { static int n; if (size >= 65536 && n++ < 60) debugPrintf("bufferData %d bytes target 0x%X usage 0x%X -> vram %uKB ram %uKB\n", (int)size, target, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); } glBufferData(target, size, data, usage); pthread_mutex_unlock(&gl_lock); }
 void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) { pthread_mutex_lock(&gl_lock); glBufferSubData(target, offset, size, data); pthread_mutex_unlock(&gl_lock); }
 GLenum glCheckFramebufferStatus_locked(GLenum target) { pthread_mutex_lock(&gl_lock); GLenum r = glCheckFramebufferStatus(target); pthread_mutex_unlock(&gl_lock); return r; }
 void glClear_locked(GLbitfield mask) { pthread_mutex_lock(&gl_lock); c_clears++; glClear(mask); pthread_mutex_unlock(&gl_lock); }
@@ -67,7 +67,7 @@ void glEnableVertexAttribArray_locked(GLuint index) { pthread_mutex_lock(&gl_loc
 void glFinish_locked(void) { pthread_mutex_lock(&gl_lock); glFinish(); pthread_mutex_unlock(&gl_lock); }
 void glFlush_locked(void) { pthread_mutex_lock(&gl_lock); glFlush(); pthread_mutex_unlock(&gl_lock); }
 void glFramebufferRenderbuffer_locked(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) { pthread_mutex_lock(&gl_lock); glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer); pthread_mutex_unlock(&gl_lock); }
-void glFramebufferTexture2D_locked(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) { pthread_mutex_lock(&gl_lock); glFramebufferTexture2D(target, attachment, textarget, texture, level); pthread_mutex_unlock(&gl_lock); }
+void glFramebufferTexture2D_locked(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) { pthread_mutex_lock(&gl_lock); { static int n; if (n++ < 40) debugPrintf("fbo attach tex %u (attach 0x%X) -> vram %uKB\n", texture, attachment, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); } glFramebufferTexture2D(target, attachment, textarget, texture, level); pthread_mutex_unlock(&gl_lock); }
 void glFrontFace_locked(GLenum mode) { pthread_mutex_lock(&gl_lock); glFrontFace(mode); pthread_mutex_unlock(&gl_lock); }
 void glGenBuffers_locked(GLsizei n, GLuint *buffers) { pthread_mutex_lock(&gl_lock); glGenBuffers(n, buffers); pthread_mutex_unlock(&gl_lock); }
 void glGenFramebuffers_locked(GLsizei n, GLuint *framebuffers) { pthread_mutex_lock(&gl_lock); glGenFramebuffers(n, framebuffers); pthread_mutex_unlock(&gl_lock); }
@@ -110,7 +110,7 @@ void glPixelStorei_locked(GLenum pname, GLint param) { pthread_mutex_lock(&gl_lo
 void glPolygonOffset_locked(GLfloat factor, GLfloat units) { pthread_mutex_lock(&gl_lock); glPolygonOffset(factor, units); pthread_mutex_unlock(&gl_lock); }
 void glReadPixels_locked(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *data) { pthread_mutex_lock(&gl_lock); glReadPixels(x, y, width, height, format, type, data); pthread_mutex_unlock(&gl_lock); }
 void glReleaseShaderCompiler_locked(void) { pthread_mutex_lock(&gl_lock); glReleaseShaderCompiler(); pthread_mutex_unlock(&gl_lock); }
-void glRenderbufferStorage_locked(GLenum target, GLenum internalformat, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); glRenderbufferStorage(target, internalformat, width, height); pthread_mutex_unlock(&gl_lock); }
+void glRenderbufferStorage_locked(GLenum target, GLenum internalformat, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); { static int n; if (n++ < 40) debugPrintf("renderbuffer %dx%d fmt 0x%X -> vram %uKB\n", width, height, internalformat, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); } glRenderbufferStorage(target, internalformat, width, height); pthread_mutex_unlock(&gl_lock); }
 void glScissor_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); glScissor(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
 void glShaderBinary_locked(GLsizei count, const GLuint *handles, GLenum binaryFormat, const void *binary, GLsizei length) { pthread_mutex_lock(&gl_lock); glShaderBinary(count, handles, binaryFormat, binary, length); pthread_mutex_unlock(&gl_lock); }
 void glShaderSource_locked(GLuint handle, GLsizei count, const GLchar *const *string, const GLint *length) { pthread_mutex_lock(&gl_lock); glShaderSource_log(handle, count, string, length); pthread_mutex_unlock(&gl_lock); }
