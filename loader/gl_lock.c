@@ -38,7 +38,20 @@ void glBlendEquationSeparate_locked(GLenum modeRGB, GLenum modeAlpha) { pthread_
 void glBlendFunc_locked(GLenum sfactor, GLenum dfactor) { pthread_mutex_lock(&gl_lock); glBlendFunc(sfactor, dfactor); pthread_mutex_unlock(&gl_lock); }
 void glBlendFuncSeparate_locked(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) { pthread_mutex_lock(&gl_lock); glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha); pthread_mutex_unlock(&gl_lock); }
 void glBufferData_locked(GLenum target, GLsizei size, const GLvoid *data, GLenum usage) { pthread_mutex_lock(&gl_lock); { static int n; if (size >= 65536 && n++ < 60) debugPrintf("bufferData %d bytes target 0x%X usage 0x%X -> vram %uKB ram %uKB\n", (int)size, target, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); } glBufferData(target, size, data, usage); pthread_mutex_unlock(&gl_lock); }
-void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) { pthread_mutex_lock(&gl_lock); glBufferSubData(target, offset, size, data); pthread_mutex_unlock(&gl_lock); }
+// Self-healing glBufferSubData: if the bound buffer has no storage (allocation failed or orphaned), re-create it with
+// this data instead of letting VitaGL memcpy into NULL. Logs pool state so the failure is visible.
+void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
+  pthread_mutex_lock(&gl_lock);
+  GLint cur = 0; glGetBufferParameteriv(target, GL_BUFFER_SIZE, &cur);
+  if (cur <= 0 || (GLsizeiptr)cur < offset + size) {
+    GLint id = 0; glGetIntegerv(target == 0x8893 ? 0x8895 : 0x8894, &id);
+    static int n; if (n++ < 20) debugPrintf("bufferSubData on empty buffer %d (has %d, needs %d) vram %uKB ram %uKB -> re-creating\n", id, cur, (int)(offset + size), (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024);
+    if (offset == 0) { glBufferData(target, size, data, 0x88E8 /*DYNAMIC_DRAW*/); pthread_mutex_unlock(&gl_lock); return; }
+    glBufferData(target, offset + size, NULL, 0x88E8);
+  }
+  glBufferSubData(target, offset, size, data);
+  pthread_mutex_unlock(&gl_lock);
+}
 GLenum glCheckFramebufferStatus_locked(GLenum target) { pthread_mutex_lock(&gl_lock); GLenum r = glCheckFramebufferStatus(target); pthread_mutex_unlock(&gl_lock); return r; }
 void glClear_locked(GLbitfield mask) { pthread_mutex_lock(&gl_lock); c_clears++; glClear(mask); pthread_mutex_unlock(&gl_lock); }
 void glClearColor_locked(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) { pthread_mutex_lock(&gl_lock); c_clear_r = red; c_clear_g = green; c_clear_b = blue; c_clear_a = alpha; glClearColor(red, green, blue, alpha); pthread_mutex_unlock(&gl_lock); }
