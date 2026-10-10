@@ -37,12 +37,28 @@ void glBlendEquation_locked(GLenum mode) { pthread_mutex_lock(&gl_lock); glBlend
 void glBlendEquationSeparate_locked(GLenum modeRGB, GLenum modeAlpha) { pthread_mutex_lock(&gl_lock); glBlendEquationSeparate(modeRGB, modeAlpha); pthread_mutex_unlock(&gl_lock); }
 void glBlendFunc_locked(GLenum sfactor, GLenum dfactor) { pthread_mutex_lock(&gl_lock); glBlendFunc(sfactor, dfactor); pthread_mutex_unlock(&gl_lock); }
 void glBlendFuncSeparate_locked(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) { pthread_mutex_lock(&gl_lock); glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha); pthread_mutex_unlock(&gl_lock); }
-void glBufferData_locked(GLenum target, GLsizei size, const GLvoid *data, GLenum usage) { pthread_mutex_lock(&gl_lock); { static int n; if (size >= 65536 && n++ < 60) debugPrintf("bufferData %d bytes target 0x%X usage 0x%X -> vram %uKB ram %uKB\n", (int)size, target, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); } glBufferData(target, size, data, usage); pthread_mutex_unlock(&gl_lock); }
+// glBufferData with failure detection: VitaGL records the size even when the pool allocation fails (GL_OUT_OF_MEMORY),
+// leaving a buffer that later crashes on write. Dynamic buffers draw from the small RAM pool; on failure retry as
+// static (VRAM pool, 70MB+ free).
+void glBufferData_locked(GLenum target, GLsizeiptr size, const void *data, GLenum usage) {
+  pthread_mutex_lock(&gl_lock);
+  { static int n; if (size >= 65536 && n++ < 60) debugPrintf("bufferData %d bytes target 0x%X usage 0x%X -> vram %uKB ram %uKB\n", (int)size, target, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); }
+  while (glGetError()) {}
+  glBufferData(target, size, data, usage);
+  GLenum e = glGetError();
+  if (e) {
+    static int n; if (n++ < 20) debugPrintf("bufferData FAILED (0x%X) size %d usage 0x%X — retrying as STATIC_DRAW\n", e, (int)size, usage);
+    glBufferData(target, size, data, 0x88E4 /*STATIC_DRAW*/);
+    e = glGetError(); if (e) debugPrintf("bufferData retry FAILED (0x%X)\n", e);
+  }
+  pthread_mutex_unlock(&gl_lock);
+}
 // Self-healing glBufferSubData: if the bound buffer has no storage (allocation failed or orphaned), re-create it with
 // this data instead of letting VitaGL memcpy into NULL. Logs pool state so the failure is visible.
 void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
   pthread_mutex_lock(&gl_lock);
   GLint cur = 0; glGetBufferParameteriv(target, GL_BUFFER_SIZE, &cur);
+  while (glGetError()) {}
   if (cur <= 0 || (GLsizeiptr)cur < offset + size) {
     GLint id = 0; glGetIntegerv(target == 0x8893 ? 0x8895 : 0x8894, &id);
     static int n; if (n++ < 20) debugPrintf("bufferSubData on empty buffer %d (has %d, needs %d) vram %uKB ram %uKB -> re-creating\n", id, cur, (int)(offset + size), (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024);
