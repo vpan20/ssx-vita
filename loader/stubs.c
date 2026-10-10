@@ -13,10 +13,18 @@
 #include <unistd.h>
 #include "stubs.h"
 
+// One log handle kept for the session (per-line open/close fails under card pressure); reopen on write failure.
+static SceUID log_fd = -1; static SceKernelLwMutexWork log_lock; static int log_lock_init;
+static void log_open(void) {
+  log_fd = sceIoOpen(DATA_PATH"/ssx.log", SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND, 0777);
+  if (log_fd < 0) log_fd = sceIoOpen("ux0:data/ssx.log", SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND, 0777);
+}
 void debugPrintf(const char*fmt,...){va_list a;va_start(a,fmt);char b[1024];int n=vsnprintf(b,sizeof b,fmt,a);va_end(a);if(n<=0)return;
-  SceUID fd=sceIoOpen(DATA_PATH"/ssx.log",SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND,0777);
-  if(fd<0)fd=sceIoOpen("ux0:data/ssx.log",SCE_O_WRONLY|SCE_O_CREAT|SCE_O_APPEND,0777);   // fallback if uma0 write fails
-  if(fd>=0){sceIoWrite(fd,b,n);sceIoClose(fd);}
+  if (!log_lock_init) { sceKernelCreateLwMutex(&log_lock, "log", 0, 0, NULL); log_lock_init = 1; }
+  sceKernelLockLwMutex(&log_lock, 1, NULL);
+  if (log_fd < 0) log_open();
+  if (log_fd >= 0) { int w = sceIoWrite(log_fd, b, n); if (w < 0) { sceIoClose(log_fd); log_open(); if (log_fd >= 0) sceIoWrite(log_fd, b, n); } }
+  sceKernelUnlockLwMutex(&log_lock, 1);
   sceClibPrintf("%s",b);}
 void log_vprintf(const char*tag,const char*fmt,va_list a){if(!fmt)return;char b[1024];vsnprintf(b,sizeof b,fmt,a);debugPrintf("[%s] %s\n",tag,b);}
 
