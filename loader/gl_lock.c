@@ -8,6 +8,7 @@ static pthread_mutex_t gl_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 void debugPrintf(const char *fmt, ...);
 // per-frame GL activity summary (printed by main loop via gl_frame_summary)
 static unsigned c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
@@ -58,19 +59,25 @@ void glBufferData_locked(GLenum target, GLsizeiptr size, const void *data, GLenu
 // ptr=NULL; VitaGL's glBufferSubData then does vgl_memcpy(gpu_buf->ptr + offset, ...) with NO null check.
 // So once a backing is dropped, GL_BUFFER_SIZE still reports full size, the bounds check passes, and the
 // memcpy writes into NULL (dst=0, n=1.75MB — the byte-identical abort every run). GL_BUFFER_SIZE cannot be
-// trusted here. For a full-buffer rewrite (offset 0, how Scaleform commits), re-establish backing with
-// glBufferData, which re-allocates AND copies the data in one shot, so we never memcpy into a NULL ptr.
-// glBufferData's own alloc failure returns cleanly (error path), so the worst case is a stale buffer, not a crash.
+// trusted here. Write straight into the existing backing via a plain WRITE map: VitaGL's
+// glMapBufferRange returns gpu_buf->ptr + offset and never reallocates, so this is a pure in-place
+// copy with no per-frame allocation. (Re-creating via glBufferData every commit worked but churned
+// the RAM pool to exhaustion -> a later alloc returned NULL -> crash in the FFP path.) When the
+// backing has been dropped (ptr=NULL), the map pointer collapses to ~offset (exactly NULL for the
+// offset-0 commit Scaleform uses), so we rebuild only on an actual backing loss, not every frame.
 void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
   pthread_mutex_lock(&gl_lock);
   while (glGetError()) {}
-  if (offset == 0) {
-    { static int n; if (size >= 65536 && n++ < 10) debugPrintf("subData full-rewrite via bufferData: %d bytes target 0x%X -> ram %uKB vram %uKB\n", (int)size, target, (unsigned)vglMemFree(VGL_MEM_RAM)/1024, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); }
-    glBufferData(target, size, data, 0x88E8 /*DYNAMIC_DRAW*/);
+  void *p = glMapBufferRange(target, offset, size, 0x0002 /*GL_MAP_WRITE_BIT*/);
+  if (p && (uintptr_t)p > (uintptr_t)offset + 0x10000) {   // real pool storage, not a NULL-backed ptr+offset
+    memcpy(p, data, size);
+    glUnmapBuffer(target);
     pthread_mutex_unlock(&gl_lock);
     return;
   }
-  // Partial update: can't rebuild from a sub-range, so only grow an undersized buffer, then sub-update.
+  while (glGetError()) {}
+  { static int n; if (size >= 65536 && n++ < 20) debugPrintf("subData rebuild (backing dropped): %d bytes target 0x%X off %d -> ram %uKB vram %uKB\n", (int)size, target, (int)offset, (unsigned)vglMemFree(VGL_MEM_RAM)/1024, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); }
+  if (offset == 0) { glBufferData(target, size, data, 0x88E8 /*DYNAMIC_DRAW*/); pthread_mutex_unlock(&gl_lock); return; }
   GLint cur = 0; glGetBufferParameteriv(target, GL_BUFFER_SIZE, &cur);
   while (glGetError()) {}
   if (cur <= 0 || (GLsizeiptr)cur < offset + size) { glBufferData(target, offset + size, NULL, 0x88E8); }
