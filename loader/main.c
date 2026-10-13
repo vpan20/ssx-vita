@@ -250,7 +250,19 @@ static void hook_OutOfMemory(void *mf) {
   for (int i = 0; i < 8; i++) if (w[i] > 0x94000000 && w[i] < 0x95900000) debugPrintf("  str[%d]=%.60s\n", i, (const char *)w[i]);
   orig_OutOfMemory(mf);
 }
+// Scaleform::Render::GL::MeshBuffer::Unmap(this): log the GL-table object and the vtable slot it is about to call
+static void (*orig_SfUnmap)(void *);
+static void hook_SfUnmap(void *self) {
+  uint32_t *s = self;
+  uint32_t hal = s[7];                                    // this+0x1c
+  uint32_t obj = hal ? *(uint32_t *)(hal + 0x1eb30) : 0;  // [hal+0x1eb30]
+  uint32_t vt = obj ? *(uint32_t *)obj : 0, fn = vt ? *(uint32_t *)(vt + 0x3c) : 0;
+  static int n; if (n++ < 8) debugPrintf("SfUnmap: this=%p flags=%08X size=%u data=%08X buf=%u hal=%08X obj=%08X vt=%08X slot15=%08X (game+0x%X)\n",
+    self, s[1], s[5], s[6], s[10], hal, obj, vt, fn, fn >= game_mod.text_base ? (unsigned)(fn - game_mod.text_base) : 0);
+  orig_SfUnmap(self);
+}
 static void install_hooks(void) {
+  HOOK(0xa3b18c, hook_SfUnmap, orig_SfUnmap);
   HOOK(0x14b888, hook_OutOfMemory, orig_OutOfMemory);
   HOOK(0x6438c0, hook_LoadingUpdate, orig_LoadingUpdate);
   HOOK(0x642b78, hook_UnpackUpdate, orig_UnpackUpdate);
