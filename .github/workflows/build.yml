@@ -19,7 +19,11 @@ jobs:
           git clone --depth 1 https://github.com/Rinnegatamante/vitaShaRK && make -C vitaShaRK install
           git clone --depth 1 https://github.com/Rinnegatamante/math-neon && make -C math-neon install
           # vitaGL from source: soft-float ABI, GLSL shader cache (compile once, load compiled binaries after), pthread-safe
-          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL && make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 install
+          # NO_CIRCULAR_POOL=1: route per-draw temp vertex allocs (gpu_alloc_mapped_temp) through the regular RAM-pool allocator
+          #   instead of the fixed circular ring. The ring overflowed on Scaleform's 1.75MB FE vertex draw and returned NULL,
+          #   which VitaGL's custom-shader draw path memcpy'd into unchecked (the frame-600 Data abort). Regular allocator has
+          #   the 43MB RAM pool (freed by the newlib 226 rebalance) to draw from.
+          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL && make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 install
       - name: Build
         run: |
           export PATH=$VITASDK/bin:$PATH
