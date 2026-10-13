@@ -44,28 +44,36 @@ void glBufferData_locked(GLenum target, GLsizeiptr size, const void *data, GLenu
   pthread_mutex_lock(&gl_lock);
   { static int n; if (size >= 65536 && n++ < 60) debugPrintf("bufferData %d bytes target 0x%X usage 0x%X -> vram %uKB ram %uKB\n", (int)size, target, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); }
   while (glGetError()) {}
-  if (size >= 65536 && usage != 0x88E4) usage = 0x88E4;   // >=64KB: allocate from the VRAM pool (70MB+) instead of the small RAM pool
+  // Keep the game's native usage. The old >=64KB->VRAM(STATIC) redirect is removed: the RAM pool now
+  // holds ~76MB (newlib-226 rebalance + NO_CIRCULAR_POOL), so DYNAMIC/STREAM buffers allocate there
+  // reliably and stay CPU-writable. Forcing them to VRAM only competed with textures and bought nothing.
   glBufferData(target, size, data, usage);
   GLenum e = glGetError();
-  if (e) {
-    static int n; if (n++ < 20) debugPrintf("bufferData FAILED (0x%X) size %d usage 0x%X — retrying as STATIC_DRAW\n", e, (int)size, usage);
-    glBufferData(target, size, data, 0x88E4 /*STATIC_DRAW*/);
-    e = glGetError(); if (e) debugPrintf("bufferData retry FAILED (0x%X)\n", e);
-  }
+  if (e) { static int n; if (n++ < 20) debugPrintf("bufferData FAILED (0x%X) size %d usage 0x%X\n", e, (int)size, usage); }
   pthread_mutex_unlock(&gl_lock);
 }
-// Self-healing glBufferSubData: if the bound buffer has no storage (allocation failed or orphaned), re-create it with
-// this data instead of letting VitaGL memcpy into NULL. Logs pool state so the failure is visible.
+// glBufferSubData hardening — the frame-600 crash. Confirmed via libgame.so disasm + VitaGL source:
+// Scaleform::Render::GL::MeshBuffer::Unmap commits its FE vertex buffer with glBufferSubData(offset 0,
+// full size). VitaGL's glBufferData records gpu_buf->size even when its allocation failed and left
+// ptr=NULL; VitaGL's glBufferSubData then does vgl_memcpy(gpu_buf->ptr + offset, ...) with NO null check.
+// So once a backing is dropped, GL_BUFFER_SIZE still reports full size, the bounds check passes, and the
+// memcpy writes into NULL (dst=0, n=1.75MB — the byte-identical abort every run). GL_BUFFER_SIZE cannot be
+// trusted here. For a full-buffer rewrite (offset 0, how Scaleform commits), re-establish backing with
+// glBufferData, which re-allocates AND copies the data in one shot, so we never memcpy into a NULL ptr.
+// glBufferData's own alloc failure returns cleanly (error path), so the worst case is a stale buffer, not a crash.
 void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
   pthread_mutex_lock(&gl_lock);
+  while (glGetError()) {}
+  if (offset == 0) {
+    { static int n; if (size >= 65536 && n++ < 10) debugPrintf("subData full-rewrite via bufferData: %d bytes target 0x%X -> ram %uKB vram %uKB\n", (int)size, target, (unsigned)vglMemFree(VGL_MEM_RAM)/1024, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); }
+    glBufferData(target, size, data, 0x88E8 /*DYNAMIC_DRAW*/);
+    pthread_mutex_unlock(&gl_lock);
+    return;
+  }
+  // Partial update: can't rebuild from a sub-range, so only grow an undersized buffer, then sub-update.
   GLint cur = 0; glGetBufferParameteriv(target, GL_BUFFER_SIZE, &cur);
   while (glGetError()) {}
-  if (cur <= 0 || (GLsizeiptr)cur < offset + size) {
-    GLint id = 0; glGetIntegerv(target == 0x8893 ? 0x8895 : 0x8894, &id);
-    static int n; if (n++ < 20) debugPrintf("bufferSubData on empty buffer %d (has %d, needs %d) vram %uKB ram %uKB -> re-creating\n", id, cur, (int)(offset + size), (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024);
-    if (offset == 0) { glBufferData(target, size, data, 0x88E8 /*DYNAMIC_DRAW*/); pthread_mutex_unlock(&gl_lock); return; }
-    glBufferData(target, offset + size, NULL, 0x88E8);
-  }
+  if (cur <= 0 || (GLsizeiptr)cur < offset + size) { glBufferData(target, offset + size, NULL, 0x88E8); }
   glBufferSubData(target, offset, size, data);
   pthread_mutex_unlock(&gl_lock);
 }
