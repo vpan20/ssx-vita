@@ -44,6 +44,7 @@ void glBufferData_locked(GLenum target, GLsizeiptr size, const void *data, GLenu
   pthread_mutex_lock(&gl_lock);
   { static int n; if (size >= 65536 && n++ < 60) debugPrintf("bufferData %d bytes target 0x%X usage 0x%X -> vram %uKB ram %uKB\n", (int)size, target, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); }
   while (glGetError()) {}
+  if (size >= 65536 && usage != 0x88E4) usage = 0x88E4;   // >=64KB: allocate from the VRAM pool (70MB+) instead of the small RAM pool
   glBufferData(target, size, data, usage);
   GLenum e = glGetError();
   if (e) {
