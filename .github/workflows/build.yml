@@ -1,5 +1,7 @@
 name: Build SSX.vpk
 on: [push, workflow_dispatch]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,6 +38,16 @@ jobs:
         run: |
           export PATH=$VITASDK/bin:$PATH
           mkdir -p build && cd build && cmake -DBUILD_ID=${GITHUB_SHA::7} .. && make
+      - name: Publish symbol map (branch 'symbols', for crash-dump symbolization)
+        run: |
+          export PATH=$VITASDK/bin:$PATH
+          SHA=${GITHUB_SHA::7}
+          mkdir -p /tmp/sym && arm-vita-eabi-nm -n -C build/ssx_vita | gzip -9 > /tmp/sym/$SHA.nm.gz
+          arm-vita-eabi-readelf -S build/ssx_vita | gzip -9 > /tmp/sym/$SHA.sections.gz
+          git config user.name "ssx-ci" && git config user.email "ci@users.noreply.github.com"
+          git fetch origin symbols && git checkout symbols || git checkout --orphan symbols
+          git rm -rfq --cached . >/dev/null 2>&1 || true
+          mkdir -p symbols && cp /tmp/sym/* symbols/ && git add -f symbols && git commit -qm "symbols for $SHA" && git push origin symbols
       - name: Upload VPK
         uses: actions/upload-artifact@v4
         with:
