@@ -40,6 +40,11 @@ jobs:
           # Same bug at link time (pair/postponed mode compiles in glLinkProgram): a NULL shader program is handed to sceGxm.
           sed -i 's|^\tif (p->status == PROG_LINKED) {|\tif (!p->vshader->prog \|\| !p->fshader->prog) { p->status = PROG_INVALID; return; }\n\tif (p->status == PROG_LINKED) {|' vitaGL/source/custom_shaders.c
           grep -c 'p->status = PROG_INVALID; return;' vitaGL/source/custom_shaders.c
+          # VitaGL's GLSL translator work buffers come from newlib malloc (vgl_realloc(NULL) -> malloc). Our newlib heap is
+          # almost entirely owned by the game's fixed pools; when its slack ran out, malloc returned NULL and the translator
+          # memcpy'd into NULL. Serve those buffers from VitaGL's own RAM pool (60MB+ free) first.
+          sed -i '/^void \*vgl_realloc(void \*ptr, size_t size) {/,/^}/ s|^\t\treturn malloc(size);|\t\t{ void *r = vgl_malloc(size, VGL_MEM_RAM); return r ? r : malloc(size); }|' vitaGL/source/utils/mem_utils.c
+          grep -c 'vgl_malloc(size, VGL_MEM_RAM); return r ? r : malloc(size);' vitaGL/source/utils/mem_utils.c
           make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 TEXTURES_SPEEDHACK=1 BUFFERS_SPEEDHACK=1 LOG_ERRORS=1 HAVE_SHARK_LOG=1 install
       - name: Build
         run: |

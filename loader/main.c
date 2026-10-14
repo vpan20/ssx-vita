@@ -2,6 +2,7 @@
 // com.ea.blast.MainActivity / MainThread do on the Java side. See README for the iteration loop.
 #include <vitasdk.h>
 #include <psp2/power.h>
+#include <malloc.h>
 #include <kubridge.h>
 #include <vitaGL.h>
 #include <stdio.h>
@@ -387,7 +388,8 @@ int main(int argc, char *argv[]) {
   extern int jni_video_play_pending; int video_done_at = 0;
   fn_jni VideoDone = J("Java_com_ea_VideoPlayer_PlayerAndroid_OnCompletionNativeImpl");
   for (;;) {
-    if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB)\n", frame, fi.size_user / 1024, fi.size_cdram / 1024); }
+    if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); struct mallinfo mi = mallinfo(); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB) newlib heap: used %uKB free %uKB\n", frame, fi.size_user / 1024, fi.size_cdram / 1024, (unsigned)mi.uordblks / 1024, (unsigned)mi.fordblks / 1024);
+      { extern unsigned jni_n_str, jni_n_arr, jni_b_arr, jni_n_del; debugPrintf("JNI objects so far: strings %u arrays %u (%uKB) DeleteLocalRef %u\n", jni_n_str, jni_n_arr, jni_b_arr / 1024, jni_n_del); } }
     frame++;
     SceCtrlData pad; sceCtrlPeekBufferPositive(0, &pad, 1);
     if (PadDown && PadUp) {

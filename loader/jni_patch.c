@@ -371,20 +371,21 @@ static void  CallVoidMethod(void *env,uintptr_t obj,int mid,...){ va_list ap;va_
 static void  CallVoidMethodA(void *env,uintptr_t obj,int mid,uintptr_t*a){ if(mid>=M_OPEN&&mid<=M_GETASSETS){special_callA(mid,obj,a);return;} uintptr_t f=lookup(mid); if(f)((void(*)(uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t,uintptr_t))f)(obj,a[0],a[1],a[2],a[3],a[4],a[5]); }
 
 // ---- strings / arrays / refs -------------------------------------------------
-static char *NewStringUTF(void *env, const char *s) { return s ? strdup(s) : NULL; }
+unsigned jni_n_str, jni_n_arr, jni_b_arr, jni_n_del, jni_n_glob;
+static char *NewStringUTF(void *env, const char *s) { jni_n_str++; return s ? strdup(s) : NULL; }
 char *jni_new_string(const char *s) { return strdup(s); }
 static const char *GetStringUTFChars(void *env, char *s, int *isCopy) { if (isCopy) *isCopy = 0; if ((uintptr_t)s < 0x10000) { if (s) debugPrintf("JNI: GetStringUTFChars on non-string %p\n", s); return ""; } return s; }
 static void ReleaseStringUTFChars(void *env, char *s, const char *c) {}
 static int GetStringUTFLength(void *env, char *s) { return s ? (int)strlen(s) : 0; }
 static int GetStringLength(void *env, char *s) { return s ? (int)strlen(s) : 0; }
-static void DeleteLocalRef(void *env, void *o) {}
+static void DeleteLocalRef(void *env, void *o) { jni_n_del++; }
 static void *NewGlobalRef(void *env, void *o) { return o; }
 static void DeleteGlobalRef(void *env, void *o) {}
 static int  GetArrayLength(void *env, void *a) { return a ? *(int *)a : 0; }   // arrays: [len][data...]
 static void *GetPrimitiveArrayCritical(void *env, int *a, int *c) { return a + 1; }
 static void ReleasePrimitiveArrayCritical(void *env, void *a, void *c, int m) {}
-static int *NewIntArray(void *env, int n) { int *a = calloc(n + 1, 4); a[0] = n; return a; }
-static int8_t *NewByteArray(void *env, int n) { int *a = calloc(1, n + 4); a[0] = n; return (int8_t *)a; }
+static int *NewIntArray(void *env, int n) { jni_n_arr++; jni_b_arr += n * 4; int *a = calloc(n + 1, 4); a[0] = n; return a; }
+static int8_t *NewByteArray(void *env, int n) { jni_n_arr++; jni_b_arr += n; int *a = calloc(1, n + 4); a[0] = n; return (int8_t *)a; }
 static void *GetIntArrayElements(void *env, int *a, int *c) { return a + 1; }
 static void ReleaseIntArrayElements(void *env, int *a, void *e, int m) {}
 static void *GetByteArrayElements(void *env, int *a, int *c) { return a + 1; }
@@ -435,7 +436,7 @@ static long long g_ret0l(void) { return 0; }
 static float g_ret0f(void) { return 0.0f; }
 static double g_ret0d(void) { return 0.0; }
 // element sizes for typed arrays: layout is [len][data...]
-static int *g_newarr(void *env, int n, int esz) { int *a = calloc(1, 4 + n * esz); a[0] = n; return a; }
+static int *g_newarr(void *env, int n, int esz) { jni_n_arr++; jni_b_arr += n * esz; int *a = calloc(1, 4 + n * esz); a[0] = n; return a; }
 static int *NewBooleanArray(void *e, int n) { return g_newarr(e, n, 1); }
 static int *NewCharArray(void *e, int n)    { return g_newarr(e, n, 2); }
 static int *NewShortArray(void *e, int n)   { return g_newarr(e, n, 2); }
@@ -449,7 +450,7 @@ static void g_release(void *env, int *a, void *e, int mode) {}
 REGION_GET(1) REGION_GET(2) REGION_GET(4) REGION_GET(8) REGION_SET(1) REGION_SET(2) REGION_SET(4) REGION_SET(8)
 static void *NewObjectV(void *env, int c, int m, va_list a) { return (void *)1; }
 static void *NewObjectA(void *env, int c, int m, void *a) { return (void *)1; }
-static void *NewString(void *env, const unsigned short *s, int len) { char *r = calloc(1, len + 1); for (int i = 0; i < len; i++) r[i] = (char)s[i]; return r; }
+static void *NewString(void *env, const unsigned short *s, int len) { jni_n_str++; char *r = calloc(1, len + 1); for (int i = 0; i < len; i++) r[i] = (char)s[i]; return r; }
 static const unsigned short *GetStringChars(void *env, const char *s, int *c) { int n = strlen(s); unsigned short *r = calloc(n + 1, 2); for (int i = 0; i < n; i++) r[i] = (unsigned char)s[i]; if (c) *c = 1; return r; }
 static void ReleaseStringChars(void *env, const char *s, const unsigned short *c) { free((void *)c); }
 static void GetStringUTFRegion(void *env, const char *s, int start, int len, char *buf) { memcpy(buf, s + start, len); buf[len] = 0; }
