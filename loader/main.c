@@ -1,6 +1,7 @@
 // SSX (Android, com.ea.ssx v0.0.7833) → PS Vita so-loader. Boot order mirrors what
 // com.ea.blast.MainActivity / MainThread do on the Java side. See README for the iteration loop.
 #include <vitasdk.h>
+#include <psp2/power.h>
 #include <kubridge.h>
 #include <vitaGL.h>
 #include <stdio.h>
@@ -312,6 +313,8 @@ int main(int argc, char *argv[]) {
   if (!file_exists("ur0:data/libshacccg.suprx")) fatal("libshacccg.suprx missing — run ShaRKBR33D");
   vglSetShaderCachePath(DATA_PATH "/shader_cache");   // compiled shaders persist here after the first run
   sceIoMkdir(DATA_PATH "/shader_cache", 0777);
+  scePowerSetArmClockFrequency(444); scePowerSetBusClockFrequency(222); scePowerSetGpuClockFrequency(222); scePowerSetGpuXbarClockFrequency(166);
+  debugPrintf("clocks: arm %d bus %d gpu %d xbar %d\n", scePowerGetArmClockFrequency(), scePowerGetBusClockFrequency(), scePowerGetGpuClockFrequency(), scePowerGetGpuXbarClockFrequency());
   debugPrintf("vitaGL init...\n");
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 32 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 32MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc must fit
   debugPrintf("vitaGL ok\n");
@@ -384,7 +387,7 @@ int main(int argc, char *argv[]) {
   extern int jni_video_play_pending; int video_done_at = 0;
   fn_jni VideoDone = J("Java_com_ea_VideoPlayer_PlayerAndroid_OnCompletionNativeImpl");
   for (;;) {
-    if (frame < 5 || frame % 300 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB)\n", frame, fi.size_user / 1024, fi.size_cdram / 1024); }
+    if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB)\n", frame, fi.size_user / 1024, fi.size_cdram / 1024); }
     frame++;
     SceCtrlData pad; sceCtrlPeekBufferPositive(0, &pad, 1);
     if (PadDown && PadUp) {

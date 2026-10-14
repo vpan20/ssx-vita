@@ -12,12 +12,22 @@ static pthread_mutex_t gl_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 void debugPrintf(const char *fmt, ...);
 void glCompileShader_log(GLuint shader); void glLinkProgram_log(GLuint prog); void glShaderSource_log(GLuint shader, GLsizei count, const GLchar **string, const GLint *length);
 // per-frame GL activity summary (printed by main loop via gl_frame_summary)
+static unsigned c_alloc_n[5], c_alloc_kb[5]; static unsigned c_alloc_big_logged;
 static unsigned c_texsub_calls, c_texsub_px, c_subdata_calls, c_subdata_bytes, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
 static float c_clear_r, c_clear_g, c_clear_b, c_clear_a;
+// Called by VitaGL (patched in CI) on every pool allocation: size, pool (0 VRAM 1 RAM 2 PHYCONT 3 BUDGET 4 newlib), caller.
+void vgl_alloc_trace(size_t size, int type, void *ra) {
+  if (type < 0 || type > 4) type = 4;
+  c_alloc_n[type]++; c_alloc_kb[type] += (unsigned)(size / 1024);
+  if (size >= 256 * 1024 && c_alloc_big_logged < 300) { c_alloc_big_logged++; debugPrintf("vglAlloc %uKB pool %d from %p\n", (unsigned)(size / 1024), type, ra); }
+}
 void gl_frame_summary(unsigned frame) {
-  if (frame < 12 || frame % 300 == 0)
+  if (frame < 12 || frame % 100 == 0)
+    debugPrintf("vglAllocs this frame: vram %u/%uKB ram %u/%uKB other %u/%uKB\n", c_alloc_n[0], c_alloc_kb[0], c_alloc_n[1], c_alloc_kb[1], c_alloc_n[2] + c_alloc_n[3] + c_alloc_n[4], c_alloc_kb[2] + c_alloc_kb[3] + c_alloc_kb[4]);
+  memset(c_alloc_n, 0, sizeof c_alloc_n); memset(c_alloc_kb, 0, sizeof c_alloc_kb);
+  if (frame < 12 || frame % 100 == 0)
     debugPrintf("vitaGL pools: vram free=%uKB ram free=%uKB\n", (unsigned)vglMemFree(VGL_MEM_VRAM) / 1024, (unsigned)vglMemFree(VGL_MEM_RAM) / 1024);
-  if (frame < 12 || frame % 300 == 0)
+  if (frame < 12 || frame % 100 == 0)
     debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u subData=%u calls/%uKB texSub=%u calls/%uKpx viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
       frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_subdata_calls, c_subdata_bytes / 1024, c_texsub_calls, c_texsub_px / 1024, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
   c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = c_subdata_calls = c_subdata_bytes = c_texsub_calls = c_texsub_px = 0;

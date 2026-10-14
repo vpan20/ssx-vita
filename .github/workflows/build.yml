@@ -27,7 +27,11 @@ jobs:
           #   glTexSubImage2D/glBufferSubData to an object drawn in the last 4 frames (Scaleform glyph atlas + mesh buffers,
           #   dozens of writes per frame) -> ~140MB of in-flight copies drained both pools by frame ~650 and fps fell to 1.4.
           #   Write in place instead. LOG_ERRORS=1: enables VitaGL's NULL checks on failed allocations (no file output).
-          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL && make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 TEXTURES_SPEEDHACK=1 BUFFERS_SPEEDHACK=1 LOG_ERRORS=1 install
+          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL
+          # Allocation tracing: every pool allocation reports (size, pool, caller) to vgl_alloc_trace() in the loader.
+          sed -i 's|^void \*vgl_malloc(size_t size, vglMemType type) {|extern void vgl_alloc_trace(size_t size, int type, void *ra);\nvoid *vgl_malloc(size_t size, vglMemType type) { vgl_alloc_trace(size, type, __builtin_return_address(0));|; s|^void \*vgl_calloc(size_t num, size_t size, vglMemType type) {|void *vgl_calloc(size_t num, size_t size, vglMemType type) { vgl_alloc_trace(num * size, type, __builtin_return_address(0));|; s|^void \*vgl_memalign(size_t alignment, size_t size, vglMemType type) {|void *vgl_memalign(size_t alignment, size_t size, vglMemType type) { vgl_alloc_trace(size, type, __builtin_return_address(0));|' vitaGL/source/utils/mem_utils.c
+          grep -c vgl_alloc_trace vitaGL/source/utils/mem_utils.c
+          make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 TEXTURES_SPEEDHACK=1 BUFFERS_SPEEDHACK=1 LOG_ERRORS=1 install
       - name: Build
         run: |
           export PATH=$VITASDK/bin:$PATH
