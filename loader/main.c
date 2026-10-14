@@ -313,7 +313,7 @@ int main(int argc, char *argv[]) {
   vglSetShaderCachePath(DATA_PATH "/shader_cache");   // compiled shaders persist here after the first run
   sceIoMkdir(DATA_PATH "/shader_cache", 0777);
   debugPrintf("vitaGL init...\n");
-  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 20 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 20MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc must fit
+  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 32 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE)   // leave 20MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc must fit;
   debugPrintf("vitaGL ok\n");
   glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default viewport is 0x0 and the game never sets one; must come AFTER vglInit
 

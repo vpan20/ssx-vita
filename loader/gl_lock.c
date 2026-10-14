@@ -10,20 +10,20 @@ static pthread_mutex_t gl_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 #include <stdlib.h>
 #include <stdint.h>
 void debugPrintf(const char *fmt, ...);
+void glCompileShader_log(GLuint shader); void glLinkProgram_log(GLuint prog); void glShaderSource_log(GLuint shader, GLsizei count, const GLchar **string, const GLint *length);
 // per-frame GL activity summary (printed by main loop via gl_frame_summary)
-static unsigned c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
+static unsigned c_subdata_calls, c_subdata_bytes, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
 static float c_clear_r, c_clear_g, c_clear_b, c_clear_a;
-// FBO attach cache — declared here so glDeleteFramebuffers_locked (which precedes glFramebufferTexture2D_locked) can use it
-typedef struct { GLuint fbo; GLenum attachment; GLuint tex; GLint level; } fbo_attach_t;
-static fbo_attach_t fbo_attach_cache[256]; static int fbo_attach_n;
 void gl_frame_summary(unsigned frame) {
   if (frame < 12 || frame % 300 == 0)
     debugPrintf("vitaGL pools: vram free=%uKB ram free=%uKB\n", (unsigned)vglMemFree(VGL_MEM_VRAM) / 1024, (unsigned)vglMemFree(VGL_MEM_RAM) / 1024);
   if (frame < 12 || frame % 300 == 0)
-    debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
-      frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
-  c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = 0;
+    debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u subData=%u calls/%uKB viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
+      frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_subdata_calls, c_subdata_bytes / 1024, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
+  c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = c_subdata_calls = c_subdata_bytes = 0;
 }
+typedef struct { GLuint fbo; GLenum attachment; GLuint tex; GLint level; } fbo_attach_t;
+static fbo_attach_t fbo_attach_cache[256]; static int fbo_attach_n;
 void gl_lock_acquire(void) { pthread_mutex_lock(&gl_lock); }
 void gl_lock_release(void) { pthread_mutex_unlock(&gl_lock); }
 
@@ -38,50 +38,59 @@ void glBlendEquation_locked(GLenum mode) { pthread_mutex_lock(&gl_lock); glBlend
 void glBlendEquationSeparate_locked(GLenum modeRGB, GLenum modeAlpha) { pthread_mutex_lock(&gl_lock); glBlendEquationSeparate(modeRGB, modeAlpha); pthread_mutex_unlock(&gl_lock); }
 void glBlendFunc_locked(GLenum sfactor, GLenum dfactor) { pthread_mutex_lock(&gl_lock); glBlendFunc(sfactor, dfactor); pthread_mutex_unlock(&gl_lock); }
 void glBlendFuncSeparate_locked(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) { pthread_mutex_lock(&gl_lock); glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha); pthread_mutex_unlock(&gl_lock); }
+// VitaGL buffer "names" are pointers to its vbo struct { void *ptr; int32_t size; ... }. Reading ptr directly
+// has no side effects (mapping would clear the buffer's in-use frame and let VitaGL free storage the GPU still reads).
+static void *vgl_storage(GLenum target) {
+  GLint id = 0; glGetIntegerv(target == 0x8893 ? 0x8895 : 0x8894, &id);
+  while (glGetError()) {}
+  if ((uintptr_t)id < 0x1000) return NULL;
+  return *(void **)(uintptr_t)id;
+}
 // glBufferData with failure detection: VitaGL records the size even when the pool allocation fails (GL_OUT_OF_MEMORY),
-// leaving a buffer that later crashes on write. Dynamic buffers draw from the small RAM pool; on failure retry as
-// static (VRAM pool, 70MB+ free).
+// leaving a buffer with NULL storage that later crashes on write. Large buffers go to the VRAM pool; on failure retry
+// static; if that fails too the buffer keeps NULL storage and glBufferSubData_locked refuses writes to it.
 void glBufferData_locked(GLenum target, GLsizeiptr size, const void *data, GLenum usage) {
   pthread_mutex_lock(&gl_lock);
   { static int n; if (size >= 65536 && n++ < 60) debugPrintf("bufferData %d bytes target 0x%X usage 0x%X -> vram %uKB ram %uKB\n", (int)size, target, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); }
   while (glGetError()) {}
-  // Keep the game's native usage. The old >=64KB->VRAM(STATIC) redirect is removed: the RAM pool now
-  // holds ~76MB (newlib-226 rebalance + NO_CIRCULAR_POOL), so DYNAMIC/STREAM buffers allocate there
-  // reliably and stay CPU-writable. Forcing them to VRAM only competed with textures and bought nothing.
+  if (size >= 65536 && usage != 0x88E4) usage = 0x88E4;   // >=64KB: allocate from the VRAM pool (70MB+) instead of the small RAM pool
   glBufferData(target, size, data, usage);
   GLenum e = glGetError();
-  if (e) { static int n; if (n++ < 20) debugPrintf("bufferData FAILED (0x%X) size %d usage 0x%X\n", e, (int)size, usage); }
+  if (!e && size > 0 && !vgl_storage(target)) e = GL_OUT_OF_MEMORY;
+  if (e) {
+    static int n; if (n++ < 40) debugPrintf("bufferData FAILED (0x%X) size %d usage 0x%X vram %uKB ram %uKB — retrying as STATIC_DRAW\n", e, (int)size, usage, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024);
+    glBufferData(target, size, data, 0x88E4 /*STATIC_DRAW*/);
+    e = glGetError();
+    if (!e && size > 0 && !vgl_storage(target)) e = GL_OUT_OF_MEMORY;
+    if (e) { debugPrintf("bufferData retry FAILED (0x%X) — buffer left empty\n", e); }
+  }
   pthread_mutex_unlock(&gl_lock);
 }
-// glBufferSubData hardening — the frame-600 crash. Confirmed via libgame.so disasm + VitaGL source:
-// Scaleform::Render::GL::MeshBuffer::Unmap commits its FE vertex buffer with glBufferSubData(offset 0,
-// full size). VitaGL's glBufferData records gpu_buf->size even when its allocation failed and left
-// ptr=NULL; VitaGL's glBufferSubData then does vgl_memcpy(gpu_buf->ptr + offset, ...) with NO null check.
-// So once a backing is dropped, GL_BUFFER_SIZE still reports full size, the bounds check passes, and the
-// memcpy writes into NULL (dst=0, n=1.75MB — the byte-identical abort every run). GL_BUFFER_SIZE cannot be
-// trusted here. Write straight into the existing backing via a plain WRITE map: VitaGL's
-// glMapBufferRange returns gpu_buf->ptr + offset and never reallocates, so this is a pure in-place
-// copy with no per-frame allocation. (Re-creating via glBufferData every commit worked but churned
-// the RAM pool to exhaustion -> a later alloc returned NULL -> crash in the FFP path.) When the
-// backing has been dropped (ptr=NULL), the map pointer collapses to ~offset (exactly NULL for the
-// offset-0 commit Scaleform uses), so we rebuild only on an actual backing loss, not every frame.
+// glBufferSubData: VitaGL orphans any buffer drawn within the last FRAME_PURGE_FREQ frames — it allocates a NEW
+// full-size copy of the buffer on EVERY glBufferSubData call (Scaleform's 1.4MB/1.7MB mesh buffers, dozens of
+// small writes per frame → ~100MB of in-flight copies, both pools drained within a few hundred frames), and when
+// that allocation fails it memcpys from/into NULL (both crash signatures we have seen). Write IN PLACE instead,
+// for every size: Scaleform fences its own buffers, so this matches the glMapBufferOES path it prefers anyway.
 void glBufferSubData_locked(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
   pthread_mutex_lock(&gl_lock);
-  while (glGetError()) {}
-  void *p = glMapBufferRange(target, offset, size, 0x0002 /*GL_MAP_WRITE_BIT*/);
-  if (p && (uintptr_t)p > (uintptr_t)offset + 0x10000) {   // real pool storage, not a NULL-backed ptr+offset
-    memcpy(p, data, size);
-    glUnmapBuffer(target);
-    pthread_mutex_unlock(&gl_lock);
-    return;
-  }
-  while (glGetError()) {}
-  { static int n; if (size >= 65536 && n++ < 20) debugPrintf("subData rebuild (backing dropped): %d bytes target 0x%X off %d -> ram %uKB vram %uKB\n", (int)size, target, (int)offset, (unsigned)vglMemFree(VGL_MEM_RAM)/1024, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); }
-  if (offset == 0) { glBufferData(target, size, data, 0x88E8 /*DYNAMIC_DRAW*/); pthread_mutex_unlock(&gl_lock); return; }
+  if (size <= 0 || !data) { pthread_mutex_unlock(&gl_lock); return; }
   GLint cur = 0; glGetBufferParameteriv(target, GL_BUFFER_SIZE, &cur);
   while (glGetError()) {}
-  if (cur <= 0 || (GLsizeiptr)cur < offset + size) { glBufferData(target, offset + size, NULL, 0x88E8); }
-  glBufferSubData(target, offset, size, data);
+  c_subdata_calls++; c_subdata_bytes += (unsigned)size;
+  { static int n; if (size >= 65536 && n++ < 30) debugPrintf("bufferSubData target 0x%X off %d size %d (buffer size %d)\n", target, (int)offset, (int)size, cur); }
+  if (cur <= 0 || (GLsizeiptr)cur < offset + size) {
+    GLint id = 0; glGetIntegerv(target == 0x8893 ? 0x8895 : 0x8894, &id);
+    static int n; if (n++ < 20) debugPrintf("bufferSubData on empty/short buffer %d (has %d, needs %d) vram %uKB ram %uKB -> re-creating\n", id, cur, (int)(offset + size), (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024);
+    GLsizeiptr need = offset + size; if ((GLsizeiptr)cur > need) need = cur;
+    pthread_mutex_unlock(&gl_lock); glBufferData_locked(target, need, NULL, 0x88E4); pthread_mutex_lock(&gl_lock);
+  }
+  uint8_t *base = vgl_storage(target);
+  if (!base) {   // storage missing (allocation failed): refuse the write rather than crash inside VitaGL
+    static int n; if (n++ < 20) debugPrintf("bufferSubData: buffer has NO storage (size %d, vram %uKB ram %uKB) — write dropped\n", cur, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024);
+    pthread_mutex_unlock(&gl_lock); return;
+  }
+  GLint now = 0; glGetBufferParameteriv(target, GL_BUFFER_SIZE, &now); while (glGetError()) {}
+  if ((GLsizeiptr)now >= offset + size) memcpy(base + offset, data, size);
   pthread_mutex_unlock(&gl_lock);
 }
 GLenum glCheckFramebufferStatus_locked(GLenum target) { pthread_mutex_lock(&gl_lock); GLenum r = glCheckFramebufferStatus(target); pthread_mutex_unlock(&gl_lock); return r; }
@@ -117,7 +126,6 @@ void glFlush_locked(void) { pthread_mutex_lock(&gl_lock); glFlush(); pthread_mut
 void glFramebufferRenderbuffer_locked(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) { pthread_mutex_lock(&gl_lock); glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer); pthread_mutex_unlock(&gl_lock); }
 // VitaGL allocates a new render surface on every glFramebufferTexture2D, even when re-attaching the same texture
 // (this game re-attaches its FE target every frame: 4.6MB leaked per call). Skip attaches that change nothing.
-// fbo_attach_cache is declared near the top (above glDeleteFramebuffers_locked, which also uses it)
 void glFramebufferTexture2D_locked(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
   pthread_mutex_lock(&gl_lock);
   int found = -1;
@@ -177,7 +185,7 @@ void glReleaseShaderCompiler_locked(void) { pthread_mutex_lock(&gl_lock); glRele
 void glRenderbufferStorage_locked(GLenum target, GLenum internalformat, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); { static int n; if (n++ < 40) debugPrintf("renderbuffer %dx%d fmt 0x%X -> vram %uKB\n", width, height, internalformat, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); } glRenderbufferStorage(target, internalformat, width, height); pthread_mutex_unlock(&gl_lock); }
 void glScissor_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); glScissor(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
 void glShaderBinary_locked(GLsizei count, const GLuint *handles, GLenum binaryFormat, const void *binary, GLsizei length) { pthread_mutex_lock(&gl_lock); glShaderBinary(count, handles, binaryFormat, binary, length); pthread_mutex_unlock(&gl_lock); }
-void glShaderSource_locked(GLuint handle, GLsizei count, const GLchar *const *string, const GLint *length) { pthread_mutex_lock(&gl_lock); glShaderSource_log(handle, count, string, length); pthread_mutex_unlock(&gl_lock); }
+void glShaderSource_locked(GLuint handle, GLsizei count, const GLchar *const *string, const GLint *length) { pthread_mutex_lock(&gl_lock); glShaderSource_log(handle, count, (const GLchar **)string, length); pthread_mutex_unlock(&gl_lock); }
 void glStencilFunc_locked(GLenum func, GLint ref, GLuint mask) { pthread_mutex_lock(&gl_lock); glStencilFunc(func, ref, mask); pthread_mutex_unlock(&gl_lock); }
 void glStencilFuncSeparate_locked(GLenum face, GLenum func, GLint ref, GLuint mask) { pthread_mutex_lock(&gl_lock); glStencilFuncSeparate(face, func, ref, mask); pthread_mutex_unlock(&gl_lock); }
 void glStencilMask_locked(GLuint mask) { pthread_mutex_lock(&gl_lock); glStencilMask(mask); pthread_mutex_unlock(&gl_lock); }
@@ -238,7 +246,7 @@ static void *glMapBufferOES_locked(GLenum t, GLenum a) {
 static void glGetBufferPointervOES_impl(GLenum t, GLenum pname, void **params) { if (params) *params = mapped_ptr[map_idx(t)]; }
 static GLboolean glUnmapBufferOES_locked(GLenum t) {
   pthread_mutex_lock(&gl_lock); int i = map_idx(t); GLboolean r;
-  if (mapped_ptr[i] == staging[i] && staging[i]) { glBufferSubData(t, 0, staging_sz[i], staging[i]); r = GL_TRUE; }
+  if (mapped_ptr[i] == staging[i] && staging[i]) { pthread_mutex_unlock(&gl_lock); glBufferSubData_locked(t, 0, staging_sz[i], staging[i]); pthread_mutex_lock(&gl_lock); r = GL_TRUE; }
   else r = glUnmapBuffer(t);
   mapped_ptr[i] = NULL; pthread_mutex_unlock(&gl_lock); return r;
 }
