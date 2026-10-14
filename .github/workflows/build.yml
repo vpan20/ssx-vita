@@ -45,6 +45,16 @@ jobs:
           # memcpy'd into NULL. Serve those buffers from VitaGL's own RAM pool (60MB+ free) first.
           sed -i '/^void \*vgl_realloc(void \*ptr, size_t size) {/,/^}/ s|^\t\treturn malloc(size);|\t\t{ void *r = vgl_malloc(size, VGL_MEM_RAM); return r ? r : malloc(size); }|' vitaGL/source/utils/mem_utils.c
           grep -c 'vgl_malloc(size, VGL_MEM_RAM); return r ? r : malloc(size);' vitaGL/source/utils/mem_utils.c
+          # Stencil leak: when VitaGL discards a framebuffer's hidden depth/stencil surface it frees only depthData, never
+          # stencilData (920KB per 1280x720 rebuild, ~120MB over a session before the attach cache). Free both.
+          sed -i 's|mark_as_dirty(fb->depthbuffer_ptr->depthData);|{ mark_as_dirty(fb->depthbuffer_ptr->depthData); if (fb->depthbuffer_ptr->stencilData) { mark_as_dirty(fb->depthbuffer_ptr->stencilData); } }|' vitaGL/source/framebuffers.c vitaGL/source/textures.c
+          grep -c 'mark_as_dirty(fb->depthbuffer_ptr->stencilData)' vitaGL/source/framebuffers.c vitaGL/source/textures.c
+          # Shader cache hardening: a truncated/corrupt .gxp (e.g. written by an older build) was handed straight to sceGxm.
+          # Validate the header and the GXP magic; on failure leave s->prog NULL so the shader is recompiled from source
+          # (or the program is marked invalid by the link guard above) instead of crashing in SceGxm.
+          sed -i 's|^\tvgl_fast_memcpy(&matrix_uniforms_num, buf, sizeof(uint32_t));|\tif (!in \|\| sz < 8) { s->prog = NULL; return; }\n\tvgl_fast_memcpy(\&matrix_uniforms_num, buf, sizeof(uint32_t));\n\tif (matrix_uniforms_num > 4096 \|\| sizeof(uint32_t) * (matrix_uniforms_num + 1) + 16 > sz) { s->prog = NULL; return; }|' vitaGL/source/custom_shaders.c
+          sed -i 's|^\ts->size = sz - ((uintptr_t)buf - (uintptr_t)in);|\tif ((size_t)((uintptr_t)buf - (uintptr_t)in) + 16 > sz \|\| memcmp(buf, "GXP", 3)) { s->prog = NULL; return; }\n\ts->size = sz - ((uintptr_t)buf - (uintptr_t)in);|' vitaGL/source/custom_shaders.c
+          grep -c 'memcmp(buf, "GXP", 3)' vitaGL/source/custom_shaders.c
           make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 TEXTURES_SPEEDHACK=1 BUFFERS_SPEEDHACK=1 LOG_ERRORS=1 HAVE_SHARK_LOG=1 install
       - name: Build
         run: |
