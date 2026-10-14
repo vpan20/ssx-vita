@@ -23,7 +23,11 @@ jobs:
           #   instead of the fixed circular ring. The ring overflowed on Scaleform's 1.75MB FE vertex draw and returned NULL,
           #   which VitaGL's custom-shader draw path memcpy'd into unchecked (the frame-600 Data abort). Regular allocator has
           #   the 43MB RAM pool (freed by the newlib 226 rebalance) to draw from.
-          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL && make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 install
+          # TEXTURES_SPEEDHACK/BUFFERS_SPEEDHACK: VitaGL otherwise re-allocates a FULL copy of a texture/buffer on every
+          #   glTexSubImage2D/glBufferSubData to an object drawn in the last 4 frames (Scaleform glyph atlas + mesh buffers,
+          #   dozens of writes per frame) -> ~140MB of in-flight copies drained both pools by frame ~650 and fps fell to 1.4.
+          #   Write in place instead. LOG_ERRORS=1: enables VitaGL's NULL checks on failed allocations (no file output).
+          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL && make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 TEXTURES_SPEEDHACK=1 BUFFERS_SPEEDHACK=1 LOG_ERRORS=1 install
       - name: Build
         run: |
           export PATH=$VITASDK/bin:$PATH

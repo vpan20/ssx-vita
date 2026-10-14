@@ -12,15 +12,15 @@ static pthread_mutex_t gl_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 void debugPrintf(const char *fmt, ...);
 void glCompileShader_log(GLuint shader); void glLinkProgram_log(GLuint prog); void glShaderSource_log(GLuint shader, GLsizei count, const GLchar **string, const GLint *length);
 // per-frame GL activity summary (printed by main loop via gl_frame_summary)
-static unsigned c_subdata_calls, c_subdata_bytes, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
+static unsigned c_texsub_calls, c_texsub_px, c_subdata_calls, c_subdata_bytes, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
 static float c_clear_r, c_clear_g, c_clear_b, c_clear_a;
 void gl_frame_summary(unsigned frame) {
   if (frame < 12 || frame % 300 == 0)
     debugPrintf("vitaGL pools: vram free=%uKB ram free=%uKB\n", (unsigned)vglMemFree(VGL_MEM_VRAM) / 1024, (unsigned)vglMemFree(VGL_MEM_RAM) / 1024);
   if (frame < 12 || frame % 300 == 0)
-    debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u subData=%u calls/%uKB viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
-      frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_subdata_calls, c_subdata_bytes / 1024, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
-  c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = c_subdata_calls = c_subdata_bytes = 0;
+    debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u subData=%u calls/%uKB texSub=%u calls/%uKpx viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
+      frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_subdata_calls, c_subdata_bytes / 1024, c_texsub_calls, c_texsub_px / 1024, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
+  c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = c_subdata_calls = c_subdata_bytes = c_texsub_calls = c_texsub_px = 0;
 }
 typedef struct { GLuint fbo; GLenum attachment; GLuint tex; GLint level; } fbo_attach_t;
 static fbo_attach_t fbo_attach_cache[256]; static int fbo_attach_n;
@@ -196,7 +196,7 @@ void glTexImage2D_locked(GLenum target, GLint level, GLint internalFormat, GLsiz
 void glTexParameterf_locked(GLenum target, GLenum pname, GLfloat param) { pthread_mutex_lock(&gl_lock); glTexParameterf(target, pname, param); pthread_mutex_unlock(&gl_lock); }
 void glTexParameteri_locked(GLenum target, GLenum pname, GLint param) { pthread_mutex_lock(&gl_lock); glTexParameteri(target, pname, param); pthread_mutex_unlock(&gl_lock); }
 void glTexParameteriv_locked(GLenum target, GLenum pname, GLint *param) { pthread_mutex_lock(&gl_lock); glTexParameteriv(target, pname, param); pthread_mutex_unlock(&gl_lock); }
-void glTexSubImage2D_locked(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels) { pthread_mutex_lock(&gl_lock); glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels); pthread_mutex_unlock(&gl_lock); }
+void glTexSubImage2D_locked(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels) { pthread_mutex_lock(&gl_lock); c_texsub_calls++; c_texsub_px += (unsigned)(width * height); glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels); pthread_mutex_unlock(&gl_lock); }
 void glUniform1f_locked(GLint location, GLfloat v0) { pthread_mutex_lock(&gl_lock); glUniform1f(location, v0); pthread_mutex_unlock(&gl_lock); }
 void glUniform1fv_locked(GLint location, GLsizei count, const GLfloat *value) { pthread_mutex_lock(&gl_lock); glUniform1fv(location, count, value); pthread_mutex_unlock(&gl_lock); }
 void glUniform1i_locked(GLint location, GLint v0) { pthread_mutex_lock(&gl_lock); glUniform1i(location, v0); pthread_mutex_unlock(&gl_lock); }
