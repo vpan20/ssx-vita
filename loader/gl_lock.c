@@ -34,6 +34,8 @@ void gl_frame_summary(unsigned frame) {
 }
 typedef struct { GLuint fbo; GLenum attachment; GLuint tex; GLint level; } fbo_attach_t;
 static fbo_attach_t fbo_attach_cache[256]; static int fbo_attach_n;
+typedef struct { GLuint fbo; GLenum attachment; GLuint rb; } fbo_rb_t;
+static fbo_rb_t fbo_rb_cache[256]; static int fbo_rb_n;
 void gl_lock_acquire(void) { pthread_mutex_lock(&gl_lock); }
 void gl_lock_release(void) { pthread_mutex_unlock(&gl_lock); }
 
@@ -117,9 +119,9 @@ GLuint glCreateProgram_locked(void) { pthread_mutex_lock(&gl_lock); GLuint r = g
 GLuint glCreateShader_locked(GLenum shaderType) { pthread_mutex_lock(&gl_lock); GLuint r = glCreateShader(shaderType); pthread_mutex_unlock(&gl_lock); return r; }
 void glCullFace_locked(GLenum mode) { pthread_mutex_lock(&gl_lock); glCullFace(mode); pthread_mutex_unlock(&gl_lock); }
 void glDeleteBuffers_locked(GLsizei n, const GLuint *gl_buffers) { pthread_mutex_lock(&gl_lock); glDeleteBuffers(n, gl_buffers); pthread_mutex_unlock(&gl_lock); }
-void glDeleteFramebuffers_locked(GLsizei n, const GLuint *framebuffers) { pthread_mutex_lock(&gl_lock); for (GLsizei k = 0; k < n; k++) for (int i = 0; i < fbo_attach_n; i++) if (fbo_attach_cache[i].fbo == framebuffers[k]) fbo_attach_cache[i].tex = 0xFFFFFFFF; glDeleteFramebuffers(n, framebuffers); pthread_mutex_unlock(&gl_lock); }
+void glDeleteFramebuffers_locked(GLsizei n, const GLuint *framebuffers) { pthread_mutex_lock(&gl_lock); for (GLsizei k = 0; k < n; k++) { for (int i = 0; i < fbo_attach_n; i++) if (fbo_attach_cache[i].fbo == framebuffers[k]) fbo_attach_cache[i].tex = 0xFFFFFFFF; for (int i = 0; i < fbo_rb_n; i++) if (fbo_rb_cache[i].fbo == framebuffers[k]) fbo_rb_cache[i].rb = 0xFFFFFFFF; } glDeleteFramebuffers(n, framebuffers); pthread_mutex_unlock(&gl_lock); }
 void glDeleteProgram_locked(GLuint prog) { pthread_mutex_lock(&gl_lock); glDeleteProgram(prog); pthread_mutex_unlock(&gl_lock); }
-void glDeleteRenderbuffers_locked(GLsizei n, const GLuint *renderbuffers) { pthread_mutex_lock(&gl_lock); glDeleteRenderbuffers(n, renderbuffers); pthread_mutex_unlock(&gl_lock); }
+void glDeleteRenderbuffers_locked(GLsizei n, const GLuint *renderbuffers) { pthread_mutex_lock(&gl_lock); for (GLsizei k = 0; k < n; k++) for (int i = 0; i < fbo_rb_n; i++) if (fbo_rb_cache[i].rb == renderbuffers[k]) fbo_rb_cache[i].rb = 0xFFFFFFFF; glDeleteRenderbuffers(n, renderbuffers); pthread_mutex_unlock(&gl_lock); }
 void glDeleteShader_locked(GLuint shad) { pthread_mutex_lock(&gl_lock); glDeleteShader(shad); pthread_mutex_unlock(&gl_lock); }
 void glDeleteTextures_locked(GLsizei n, const GLuint *textures) { pthread_mutex_lock(&gl_lock); glDeleteTextures(n, textures); pthread_mutex_unlock(&gl_lock); }
 void glDepthFunc_locked(GLenum func) { pthread_mutex_lock(&gl_lock); glDepthFunc(func); pthread_mutex_unlock(&gl_lock); }
@@ -133,7 +135,20 @@ void glEnable_locked(GLenum cap) { pthread_mutex_lock(&gl_lock); glEnable(cap); 
 void glEnableVertexAttribArray_locked(GLuint index) { pthread_mutex_lock(&gl_lock); glEnableVertexAttribArray(index); pthread_mutex_unlock(&gl_lock); }
 void glFinish_locked(void) { pthread_mutex_lock(&gl_lock); glFinish(); pthread_mutex_unlock(&gl_lock); }
 void glFlush_locked(void) { pthread_mutex_lock(&gl_lock); glFlush(); pthread_mutex_unlock(&gl_lock); }
-void glFramebufferRenderbuffer_locked(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) { pthread_mutex_lock(&gl_lock); glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer); pthread_mutex_unlock(&gl_lock); }
+// glFramebufferRenderbuffer: VitaGL marks the FBO's hidden depth buffer dirty on EVERY call and re-allocates
+// depth (4B/px) + stencil (1B/px) at the next scene start — 4.6MB per call at 1280x720 — and never frees the
+// stencil half. The game re-attaches its depth renderbuffer every frame: that was the 100MB pool drain. Skip no-op re-attaches.
+void glFramebufferRenderbuffer_locked(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) {
+  pthread_mutex_lock(&gl_lock);
+  int found = -1;
+  for (int i = 0; i < fbo_rb_n; i++) if (fbo_rb_cache[i].fbo == cur_fbo && fbo_rb_cache[i].attachment == attachment) { found = i; break; }
+  if (found >= 0 && fbo_rb_cache[found].rb == renderbuffer) { static int n; if (n++ < 5) debugPrintf("fbo rb attach: unchanged (fbo %u rb %u) — skipped\n", cur_fbo, renderbuffer); pthread_mutex_unlock(&gl_lock); return; }
+  { static int n; if (n++ < 40) debugPrintf("fbo rb attach fbo %u attach 0x%X rb %u -> vram %uKB ram %uKB\n", cur_fbo, attachment, renderbuffer, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024); }
+  if (found < 0 && fbo_rb_n < 256) { found = fbo_rb_n++; fbo_rb_cache[found].fbo = cur_fbo; fbo_rb_cache[found].attachment = attachment; }
+  if (found >= 0) fbo_rb_cache[found].rb = renderbuffer;
+  glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
+  pthread_mutex_unlock(&gl_lock);
+}
 // VitaGL allocates a new render surface on every glFramebufferTexture2D, even when re-attaching the same texture
 // (this game re-attaches its FE target every frame: 4.6MB leaked per call). Skip attaches that change nothing.
 void glFramebufferTexture2D_locked(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {

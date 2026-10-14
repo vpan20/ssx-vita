@@ -35,6 +35,19 @@ int nanosleep_yield(const struct timespec *req, struct timespec *rem) { long lon
 // Shader compile/link diagnostics: VitaGL translates GLSL through vitashark; failures are otherwise silent
 static char last_src_head[400];
 static char last_src_full[32768]; static int shader_fail_dumps;
+// keep a copy of the (pre-processed) source per shader handle so link-time compile failures can be dumped
+static struct { GLuint sh; char *src; } src_tab[64]; static int src_tab_n;
+static void remember_src(GLuint sh, const char *src) {
+  for (int i = 0; i < 64; i++) if (src_tab[i].sh == sh) { free(src_tab[i].src); src_tab[i].src = strdup(src); return; }
+  int i = src_tab_n++ % 64; free(src_tab[i].src); src_tab[i].sh = sh; src_tab[i].src = strdup(src);
+}
+static const char *recall_src(GLuint sh) { for (int i = 0; i < 64; i++) if (src_tab[i].sh == sh) return src_tab[i].src; return NULL; }
+static void dump_src(GLuint sh) {
+  const char *src = recall_src(sh); if (!src) { debugPrintf("(no source kept for shader %u)\n", sh); return; }
+  char *copy = strdup(src); debugPrintf("--- source of shader %u ---\n", sh);
+  for (char *q = copy; *q; ) { char *e = strchr(q, '\n'); if (!e) { debugPrintf("%s\n", q); break; } *e = 0; debugPrintf("%s\n", q); q = e + 1; }
+  debugPrintf("--- end ---\n"); free(copy);
+}
 // GLSL pre-pass for VitaGL's translator: it does not handle the "*=" operator (documented FIXME), so rewrite
 // "lhs *= rhs;" as "lhs = lhs * rhs;". lhs = identifier with optional .swizzle / [index] chain.
 static int is_id_char(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '[' || c == ']'; }
@@ -73,6 +86,7 @@ void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *l
     if (n == 1) {
       char *fixed = glsl_prepass(src[0], l);
       char *final = rename_tex_sampler(fixed, strlen(fixed)); free(fixed);
+      remember_src(sh, final);
       { size_t fl = strlen(final); if (fl >= sizeof last_src_full) fl = sizeof last_src_full - 1; memcpy(last_src_full, final, fl); last_src_full[fl] = 0; }
       const GLchar *one[1] = { final }; glShaderSource(sh, 1, one, NULL); free(final); return;
     }
@@ -89,7 +103,10 @@ void glCompileShader_log(GLuint sh) {
 void glLinkProgram_log(GLuint p) {
   glLinkProgram(p);
   GLint ok = 0; glGetProgramiv(p, GL_LINK_STATUS, &ok);
-  if (!ok) { char log[1024] = ""; GLsizei ln = 0; glGetProgramInfoLog(p, sizeof log, &ln, log); debugPrintf("PROGRAM LINK FAIL (%u): %s\n", p, log); }
+  if (!ok) { char log[1024] = ""; GLsizei ln = 0; glGetProgramInfoLog(p, sizeof log, &ln, log); debugPrintf("PROGRAM LINK FAIL (%u): %s\n", p, log);
+    GLuint shs[4] = {0}; GLsizei nsh = 0; glGetAttachedShaders(p, 4, &nsh, shs);
+    for (GLsizei i = 0; i < nsh; i++) { GLint cok = 0; glGetShaderiv(shs[i], GL_COMPILE_STATUS, &cok); char sl[2048] = ""; GLsizei sln = 0; glGetShaderInfoLog(shs[i], sizeof sl, &sln, sl);
+      debugPrintf("  shader %u compile ok=%d log: %s\n", shs[i], cok, sl); if (!cok && shader_fail_dumps++ < 4) dump_src(shs[i]); } }
 }
 // GL functions absent from VitaGL — no-op/sane-default implementations
 void glBlendColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {}

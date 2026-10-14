@@ -37,6 +37,9 @@ jobs:
           # cache -> memcpy(buf, NULL, s->size) on the translator thread (the 21382-byte NULL-source data abort). Skip the write.
           sed -i 's|^\tSceUID f = sceIoOpen(cache_fname, SCE_O_CREAT \| SCE_O_WRONLY \| SCE_O_TRUNC, 0777);|\tif (!s->prog) return;\n\tSceUID f = sceIoOpen(cache_fname, SCE_O_CREAT \| SCE_O_WRONLY \| SCE_O_TRUNC, 0777);|' vitaGL/source/custom_shaders.c
           grep -c 'if (!s->prog) return;' vitaGL/source/custom_shaders.c
+          # Same bug at link time (pair/postponed mode compiles in glLinkProgram): a NULL shader program is handed to sceGxm.
+          sed -i 's|^\tif (p->status == PROG_LINKED) {|\tif (!p->vshader->prog \|\| !p->fshader->prog) { p->status = PROG_INVALID; return; }\n\tif (p->status == PROG_LINKED) {|' vitaGL/source/custom_shaders.c
+          grep -c 'p->status = PROG_INVALID; return;' vitaGL/source/custom_shaders.c
           make -C vitaGL SOFTFP_ABI=1 HAVE_SHADER_CACHE=1 NO_CIRCULAR_POOL=1 TEXTURES_SPEEDHACK=1 BUFFERS_SPEEDHACK=1 LOG_ERRORS=1 HAVE_SHARK_LOG=1 install
       - name: Build
         run: |
