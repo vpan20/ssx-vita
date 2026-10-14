@@ -34,6 +34,7 @@ int usleep_yield(useconds_t us) { sceKernelDelayThread(us < 100 ? 100 : us); ret
 int nanosleep_yield(const struct timespec *req, struct timespec *rem) { long long us = req ? (long long)req->tv_sec * 1000000 + req->tv_nsec / 1000 : 0; sceKernelDelayThread(us < 100 ? 100 : (SceUInt)us); return 0; }
 // Shader compile/link diagnostics: VitaGL translates GLSL through vitashark; failures are otherwise silent
 static char last_src_head[400];
+static char last_src_full[32768]; static int shader_fail_dumps;
 // GLSL pre-pass for VitaGL's translator: it does not handle the "*=" operator (documented FIXME), so rewrite
 // "lhs *= rhs;" as "lhs = lhs * rhs;". lhs = identifier with optional .swizzle / [index] chain.
 static int is_id_char(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '[' || c == ']'; }
@@ -72,6 +73,7 @@ void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *l
     if (n == 1) {
       char *fixed = glsl_prepass(src[0], l);
       char *final = rename_tex_sampler(fixed, strlen(fixed)); free(fixed);
+      { size_t fl = strlen(final); if (fl >= sizeof last_src_full) fl = sizeof last_src_full - 1; memcpy(last_src_full, final, fl); last_src_full[fl] = 0; }
       const GLchar *one[1] = { final }; glShaderSource(sh, 1, one, NULL); free(final); return;
     }
   }
@@ -81,7 +83,8 @@ void glCompileShader_log(GLuint sh) {
   glCompileShader(sh);
   GLint ok = 0; glGetShaderiv(sh, GL_COMPILE_STATUS, &ok);
   if (!ok) { char log[1024] = ""; GLsizei ln = 0; glGetShaderInfoLog(sh, sizeof log, &ln, log);
-    debugPrintf("SHADER COMPILE FAIL (%u): %s\n--- source head ---\n%s\n---\n", sh, log, last_src_head); }
+    debugPrintf("SHADER COMPILE FAIL (%u): %s\n--- source head ---\n%s\n---\n", sh, log, last_src_head);
+    if (shader_fail_dumps++ < 3) { debugPrintf("--- full source of failed shader %u ---\n", sh); for (char *q = last_src_full; *q; ) { char *e = strchr(q, '\n'); if (!e) { debugPrintf("%s\n", q); break; } *e = 0; debugPrintf("%s\n", q); q = e + 1; } debugPrintf("--- end ---\n"); } }
 }
 void glLinkProgram_log(GLuint p) {
   glLinkProgram(p);
