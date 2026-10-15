@@ -192,7 +192,43 @@ static int bionic_oflags(int f) {
   if (f & 0x400) nf |= O_APPEND;
   return nf;
 }
-int open_log(const char *p, int f, ...) { char b[512]; const char *q = fix_path(p, b, sizeof b); int fd = open(q, bionic_oflags(f), 0777); debugPrintf("open(%s, 0x%X) -> %d\n", q, f, fd); return fd; }
+// Save-file I/O tracing (internal/ssxv/*). The game writes a ~25MB "Personal Best Ghosts" save while loading a race and then
+// can't afford the 25MB 'SaveLoadFileBuffer' (Global pool) to read it back. Log every write/seek/truncate on save files and
+// cap the ghosts file at GHOST_CAP bytes (writes past the cap are reported as done but not stored).
+#define GHOST_CAP (1024 * 1024)
+static unsigned char save_fd[256];   // 1 = save file, 2 = ghosts save
+static int save_log_n;
+#define SAVE_LOG(...) do { if (save_log_n++ < 400) debugPrintf(__VA_ARGS__); } while (0)
+int open_log(const char *p, int f, ...) { char b[512]; const char *q = fix_path(p, b, sizeof b); int fd = open(q, bionic_oflags(f), 0777); debugPrintf("open(%s, 0x%X) -> %d\n", q, f, fd);
+  if (fd >= 0 && fd < 256) save_fd[fd] = strstr(q, "/internal/ssxv/") ? (strstr(q, "ghosts") ? 2 : 1) : 0;
+  return fd; }
+int close_fix(int fd) { if (fd >= 0 && fd < 256 && save_fd[fd]) { SAVE_LOG("save close(%d)\n", fd); save_fd[fd] = 0; } return close(fd); }
+ssize_t write_fix(int fd, const void *buf, size_t n) {
+  if (fd < 0 || fd >= 256 || !save_fd[fd]) return write(fd, buf, n);
+  off_t pos = lseek(fd, 0, SEEK_CUR);
+  if (save_fd[fd] == 2 && (long long)pos + (long long)n > GHOST_CAP) {
+    size_t keep = pos >= GHOST_CAP ? 0 : (size_t)(GHOST_CAP - pos);
+    SAVE_LOG("save write(%d) @%ld len %u -> CAPPED to %u (ghosts cap %d)\n", fd, (long)pos, (unsigned)n, (unsigned)keep, GHOST_CAP);
+    if (keep) write(fd, buf, keep);
+    lseek(fd, pos + (off_t)n, SEEK_SET);   // keep the game's notion of the file position consistent
+    return (ssize_t)n;
+  }
+  ssize_t r = write(fd, buf, n);
+  SAVE_LOG("save write(%d) @%ld len %u -> %d\n", fd, (long)pos, (unsigned)n, (int)r);
+  return r;
+}
+off_t lseek_fix(int fd, off_t off, int whence) {
+  off_t r = lseek(fd, off, whence);
+  if (fd >= 0 && fd < 256 && save_fd[fd]) SAVE_LOG("save lseek(%d, %ld, %d) -> %ld\n", fd, (long)off, whence, (long)r);
+  return r;
+}
+int ftruncate_fix(int fd, off_t len) {
+  if (fd >= 0 && fd < 256 && save_fd[fd]) {
+    SAVE_LOG("save ftruncate(%d, %ld)%s\n", fd, (long)len, (save_fd[fd] == 2 && len > GHOST_CAP) ? " -> CAPPED" : "");
+    if (save_fd[fd] == 2 && len > GHOST_CAP) len = GHOST_CAP;
+  }
+  return ftruncate(fd, len);
+}
 DIR *opendir_fix(const char *p) { char b[512]; const char *q = fix_path(p, b, sizeof b); DIR *d = opendir(q); debugPrintf("opendir(%s) -> %p\n", q, d); return d; }
 // The game is compiled against bionic's ARM struct stat (104 bytes, st_size at +48); newlib's Vita struct stat has a different,
 // smaller layout. Passing newlib's struct straight through gave the game a garbage st_size (-> 25MB 'SaveLoadFileBuffer' OOM when
@@ -232,24 +268,9 @@ int unlink_fix(const char *p) { char b[512]; return unlink(fix_path(p, b, sizeof
 int remove_fix(const char *p) { char b[512]; return remove(fix_path(p, b, sizeof b)); }
 int rename_fix(const char *a, const char *c) { char b1[512], b2[512]; return rename(fix_path(a, b1, sizeof b1), fix_path(c, b2, sizeof b2)); }
 // malloc/free with logging of large requests (game heaps are carved with malloc)
-// Big game pools (>=20MB, allocated once at boot) are served from VitaGL's otherwise idle phycont (~26MB) and
-// cdialog-budget (~9MB) pools before touching the newlib heap, which the game's other pools fill to the byte.
-// Only the 26MB GameWorld::SlotAlloc slab fits phycont; everything else falls through to newlib unchanged.
-static struct { void *p; size_t n; } big_tab[8]; static int big_n;
-static void *big_alloc(size_t n) {
-  if (n < 20u * 1024 * 1024 || big_n >= 8) return NULL;
-  void *p = vglAlloc(n, VGL_MEM_PHYCONT); int pool = 2;
-  if (!p) { p = vglAlloc(n, VGL_MEM_BUDGET); pool = 3; }
-  if (!p) return NULL;
-  big_tab[big_n].p = p; big_tab[big_n].n = n; big_n++;
-  debugPrintf("big alloc %uKB -> VitaGL pool %d at %p (phycont free %uKB budget free %uKB)\n", (unsigned)(n / 1024), pool, p, (unsigned)vglMemFree(VGL_MEM_PHYCONT) / 1024, (unsigned)vglMemFree(VGL_MEM_BUDGET) / 1024);
-  return p;
-}
-static int big_free(void *p) { for (int i = 0; i < big_n; i++) if (big_tab[i].p == p) { vglFree(p); big_tab[i] = big_tab[--big_n]; return 1; } return 0; }
-void free_big(void *p) { if (p && big_free(p)) return; free(p); }
-void *malloc_log(size_t n) { void *p = big_alloc(n); if (!p) p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
+void *malloc_log(size_t n) { void *p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
 void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
-void *memalign_log(size_t al, size_t n) { void *p = al <= 4096 ? big_alloc(n) : NULL; if (!p) p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
+void *memalign_log(size_t al, size_t n) { void *p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
 // GL wrappers (gl_lock.c)
 extern void *egl_get_proc_address_shim(const char *);
 extern void glActiveTexture_locked();
@@ -469,7 +490,7 @@ so_default_dynlib default_dynlib[] = {
   { "chmod", (uintptr_t)&chmod },
   { "clock", (uintptr_t)&clock },
   { "clock_gettime", (uintptr_t)&clock_gettime_rt },
-  { "close", (uintptr_t)&close },
+  { "close", (uintptr_t)&close_fix },
   { "closedir", (uintptr_t)&closedir },
   { "connect", (uintptr_t)&connect },
   { "cos", (uintptr_t)&cos },
@@ -497,7 +518,7 @@ so_default_dynlib default_dynlib[] = {
   { "fputc", (uintptr_t)&fputc },
   { "fputs", (uintptr_t)&fputs },
   { "fread", (uintptr_t)&fread },
-  { "free", (uintptr_t)&free_big },
+  { "free", (uintptr_t)&free },
   { "freeaddrinfo", (uintptr_t)&freeaddrinfo },
   { "freopen", (uintptr_t)&freopen },
   { "frexp", (uintptr_t)&frexp },
@@ -505,7 +526,7 @@ so_default_dynlib default_dynlib[] = {
   { "fstat", (uintptr_t)&fstat_fix },
   { "fsync", (uintptr_t)&fsync },
   { "ftell", (uintptr_t)&ftell },
-  { "ftruncate", (uintptr_t)&ftruncate },
+  { "ftruncate", (uintptr_t)&ftruncate_fix },
   { "fwide", (uintptr_t)&fwide },
   { "fwrite", (uintptr_t)&fwrite },
   { "getaddrinfo", (uintptr_t)&getaddrinfo },
@@ -682,7 +703,7 @@ so_default_dynlib default_dynlib[] = {
   { "logf", (uintptr_t)&logf },
   { "longjmp", (uintptr_t)&longjmp },
   { "lrand48", (uintptr_t)&lrand48 },
-  { "lseek", (uintptr_t)&lseek },
+  { "lseek", (uintptr_t)&lseek_fix },
   { "malloc", (uintptr_t)&malloc_log },
   { "memalign", (uintptr_t)&memalign_log },
   { "memchr", (uintptr_t)&memchr },
@@ -828,7 +849,7 @@ so_default_dynlib default_dynlib[] = {
   { "wcscmp", (uintptr_t)&wcscmp },
   { "wcscoll", (uintptr_t)&wcscoll },
   { "wcscpy", (uintptr_t)&wcscpy },
-  { "write", (uintptr_t)&write },
+  { "write", (uintptr_t)&write_fix },
   { "_ctype_", (uintptr_t)&_ctype_ },
   { "__gnu_Unwind_Find_exidx", (uintptr_t)&__gnu_Unwind_Find_exidx },
   { "wmemchr", (uintptr_t)&wmemchr },

@@ -104,14 +104,24 @@ static void asset_path(char *out, size_t n, const char *name) {
 // dropped. Applied to the in-memory copy only; the file on the card is untouched.
 static const struct { const char *name; const char *size; } memcfg_rules[] = {
   { "AUDIODATA_GEN", "14M" },   { "GAMEPLAY_GEN", "6M" },     { "GAMEWORLD_GEN", "6M" },
-  { "GLOBAL_GEN", "45M" },      { "RENDER_GEN", "48M" },      { "STL_GEN", "8M" },           { "FE_GEN", "9M" },
+  { "GLOBAL_GEN", "24M" },      { "RENDER_GEN", "48M" },      { "STL_GEN", "8M" },           { "FE_GEN", "9M" },
   { "FE_SFGFX_GEN_A", "35M" },  { "FE_SFGFX_GEN_B", "3M" },    { "FE_SFGFX_AS_SBA", "2M" },
   { "FE_SFGFX_ASCRIPT", "9M" }, { "FE_SFGFX_REN_SBA", "4M" },  { "FE_SFGFX_RENDER", "8M" },
-  { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "9M" },  { "GAMEWORLD_SLOTALLOC", "25M" },
+  { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "9M" },  { "GAMEWORLD_SLOTALLOC", "26M" },
   { "ASSETSTREAM_READBUF", "5M" }, { "AUDIO_RWAC", "3M" },
 };
 static int is_ws(char c) { return c == ' ' || c == '\t'; }
 static char *rewrite_memcfg(char *buf, long *size) {
+  { static int dumped; if (!dumped++) {   // one-time dump of the original file: find what sizes the ghosts/save buffers
+      debugPrintf("--- memory.cfg (original, %ld bytes) ---\n", *size);
+      long s0 = 0;
+      for (long i = 0; i <= *size; i++) if (i == *size || buf[i] == '\n') {
+        int len = (int)(i - s0); if (len > 900) len = 900;
+        if (len > 0) debugPrintf("cfg| %.*s\n", len, buf + s0);
+        s0 = i + 1;
+      }
+      debugPrintf("--- end memory.cfg ---\n");
+  } }
   for (unsigned r = 0; r < sizeof(memcfg_rules)/sizeof(memcfg_rules[0]); r++) {
     const char *name = memcfg_rules[r].name; size_t nl = strlen(name); int hits = 0;
     for (long i = 0; i + (long)nl < *size; i++) {
