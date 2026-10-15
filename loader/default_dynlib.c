@@ -194,7 +194,38 @@ static int bionic_oflags(int f) {
 }
 int open_log(const char *p, int f, ...) { char b[512]; const char *q = fix_path(p, b, sizeof b); int fd = open(q, bionic_oflags(f), 0777); debugPrintf("open(%s, 0x%X) -> %d\n", q, f, fd); return fd; }
 DIR *opendir_fix(const char *p) { char b[512]; const char *q = fix_path(p, b, sizeof b); DIR *d = opendir(q); debugPrintf("opendir(%s) -> %p\n", q, d); return d; }
-int stat_fix(const char *p, struct stat *s) { char b[512]; return stat(fix_path(p, b, sizeof b), s); }
+// The game is compiled against bionic's ARM struct stat (104 bytes, st_size at +48); newlib's Vita struct stat has a different,
+// smaller layout. Passing newlib's struct straight through gave the game a garbage st_size (-> 25MB 'SaveLoadFileBuffer' OOM when
+// loading the ghosts save) and let stat() write past/short of the caller's buffer. Convert field by field.
+typedef struct {
+  unsigned long long st_dev; unsigned char pad0[4]; unsigned long st_ino32;
+  unsigned int st_mode, st_nlink, st_uid, st_gid;
+  unsigned long long st_rdev; unsigned char pad3[4];
+  long long st_size; unsigned long st_blksize; unsigned long long st_blocks;
+  unsigned long st_atime_s, st_atime_ns, st_mtime_s, st_mtime_ns, st_ctime_s, st_ctime_ns;
+  unsigned long long st_ino;
+} bionic_stat;
+_Static_assert(sizeof(bionic_stat) == 104, "bionic struct stat must be 104 bytes");
+_Static_assert(__builtin_offsetof(bionic_stat, st_size) == 48, "bionic st_size must be at +48");
+static void to_bionic_stat(const struct stat *n, bionic_stat *b) {
+  memset(b, 0, sizeof *b);
+  b->st_dev = n->st_dev; b->st_ino32 = (unsigned long)n->st_ino; b->st_ino = n->st_ino;
+  b->st_mode = n->st_mode; b->st_nlink = n->st_nlink; b->st_uid = n->st_uid; b->st_gid = n->st_gid;
+  b->st_rdev = n->st_rdev; b->st_size = n->st_size; b->st_blksize = 512; b->st_blocks = (n->st_size + 511) / 512;
+  b->st_atime_s = (unsigned long)n->st_atime; b->st_mtime_s = (unsigned long)n->st_mtime; b->st_ctime_s = (unsigned long)n->st_ctime;
+}
+int stat_fix(const char *p, bionic_stat *bs) {
+  char b[512]; const char *q = fix_path(p, b, sizeof b); struct stat s; int r = stat(q, &s);
+  if (r == 0 && bs) to_bionic_stat(&s, bs);
+  { static int n; if (n++ < 60) debugPrintf("stat(%s) -> %d size %lld\n", q, r, r == 0 ? (long long)s.st_size : -1LL); }
+  return r;
+}
+int fstat_fix(int fd, bionic_stat *bs) {
+  struct stat s; int r = fstat(fd, &s);
+  if (r == 0 && bs) to_bionic_stat(&s, bs);
+  { static int n; if (n++ < 60) debugPrintf("fstat(%d) -> %d size %lld\n", fd, r, r == 0 ? (long long)s.st_size : -1LL); }
+  return r;
+}
 int mkdir_fix(const char *p, int mode) { char b[512]; const char *q = fix_path(p, b, sizeof b); int r = mkdir(q, mode); debugPrintf("mkdir(%s) -> %d\n", q, r); return r; }
 int rmdir_fix(const char *p) { char b[512]; return rmdir(fix_path(p, b, sizeof b)); }
 int unlink_fix(const char *p) { char b[512]; return unlink(fix_path(p, b, sizeof b)); }
@@ -456,7 +487,7 @@ so_default_dynlib default_dynlib[] = {
   { "freopen", (uintptr_t)&freopen },
   { "frexp", (uintptr_t)&frexp },
   { "fseek", (uintptr_t)&fseek },
-  { "fstat", (uintptr_t)&fstat },
+  { "fstat", (uintptr_t)&fstat_fix },
   { "fsync", (uintptr_t)&fsync },
   { "ftell", (uintptr_t)&ftell },
   { "ftruncate", (uintptr_t)&ftruncate },
