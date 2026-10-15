@@ -2,6 +2,7 @@
 // com.ea.blast.MainActivity / MainThread do on the Java side. See README for the iteration loop.
 #include <vitasdk.h>
 #include <psp2/power.h>
+#include <psp2/motion.h>
 #include <malloc.h>
 #include <kubridge.h>
 #include <vitaGL.h>
@@ -398,6 +399,9 @@ int main(int argc, char *argv[]) {
   int touching = 0; unsigned frame = 0;
   extern int jni_video_play_pending; int video_done_at = 0;
   fn_jni VideoDone = J("Java_com_ea_VideoPlayer_PlayerAndroid_OnCompletionNativeImpl");
+  fn_jni BackKey = J("Java_com_ea_ssx_MainActivity_OnBackSoftKey");               // Android BACK: dismisses popups/hint panels
+  fn_jni Accel = J("Java_com_ea_blast_AccelerometerAndroidDelegate_NativeOnAcceleration");   // (env, thiz, float x, float y, float z)
+  sceMotionStartSampling();
   for (;;) {
     if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); struct mallinfo mi = mallinfo(); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB) newlib heap: used %uKB free %uKB\n", frame, fi.size_user / 1024, fi.size_cdram / 1024, (unsigned)mi.uordblks / 1024, (unsigned)mi.fordblks / 1024);
       { extern unsigned jni_n_str, jni_n_arr, jni_b_arr, jni_n_del; debugPrintf("JNI objects so far: strings %u arrays %u (%uKB) DeleteLocalRef %u\n", jni_n_str, jni_n_arr, jni_b_arr / 1024, jni_n_del); } }
@@ -410,6 +414,7 @@ int main(int argc, char *argv[]) {
           int down = (pad.buttons & padmap[i].vita) != 0;
           { static int n; if (n++ < 300) debugPrintf("input: key %d %s (frame %u)\n", padmap[i].key, down ? "down" : "up", frame); }
           (down ? PadDown : PadUp)(fake_env, NULL, 0, padmap[i].key, 0,0,0,0);
+          if (down && padmap[i].vita == SCE_CTRL_SELECT && BackKey) { BackKey(fake_env, (void *)&fake_activity, 0,0,0,0,0,0); debugPrintf("input: OnBackSoftKey\n"); }
         }
       prev_buttons = pad.buttons;
     }
@@ -419,12 +424,29 @@ int main(int argc, char *argv[]) {
       for (int i = 0; i < 4; i++) { if (ax[i] > -0.08f && ax[i] < 0.08f) ax[i] = 0; if (ax[i] != prev_axis[i]) { union { float f; uintptr_t u; } v = { ax[i] }; PadAxis(fake_env, NULL, 0, axis_id[i], v.u, 0,0,0); prev_axis[i] = ax[i]; } }
     }
     SceTouchData td; sceTouchPeek(SCE_TOUCH_PORT_FRONT, &td, 1);
-    if (Touch) {
-      static float lx, ly;
-      if (td.reportNum > 0) { float x = td.report[0].x / 1920.0f * SCREEN_W, y = td.report[0].y / 1088.0f * SCREEN_H;
-        if (!touching) { static int n; if (n++ < 300) debugPrintf("input: touch down %.0f,%.0f (frame %u)\n", x, y, frame); }
-        Touch(fake_env, NULL, touching ? TOUCH_MOVE : TOUCH_DOWN, 1000, 0, FBITS(x), FBITS(y), 0); touching = 1; lx = x; ly = y; }
-      else if (touching) { { static int n; if (n++ < 300) debugPrintf("input: touch up %.0f,%.0f (frame %u)\n", lx, ly, frame); } Touch(fake_env, NULL, TOUCH_UP, 1000, 0, FBITS(lx), FBITS(ly), 0); touching = 0; }
+    if (Touch) {   // up to 2 fingers (pinch/zoom hints); Android pointer id = slot index
+      static int on[2]; static float lx[2], ly[2]; static int vid[2]; int seen[2] = { 0, 0 };
+      for (int r = 0; r < td.reportNum && r < 4; r++) {
+        float x = td.report[r].x / 1920.0f * SCREEN_W, y = td.report[r].y / 1088.0f * SCREEN_H; int slot = -1;
+        for (int s = 0; s < 2; s++) if (on[s] && vid[s] == td.report[r].id) slot = s;
+        if (slot < 0) for (int s = 0; s < 2; s++) if (!on[s] && !seen[s]) { slot = s; break; }
+        if (slot < 0) continue;
+        seen[slot] = 1;
+        if (!on[slot]) { static int n; if (n++ < 300) debugPrintf("input: touch%d down %.0f,%.0f (frame %u)\n", slot, x, y, frame); }
+        Touch(fake_env, NULL, on[slot] ? TOUCH_MOVE : TOUCH_DOWN, 1000, slot, FBITS(x), FBITS(y), 0);
+        on[slot] = 1; vid[slot] = td.report[r].id; lx[slot] = x; ly[slot] = y;
+      }
+      for (int s = 0; s < 2; s++) if (on[s] && !seen[s]) {
+        { static int n; if (n++ < 300) debugPrintf("input: touch%d up %.0f,%.0f (frame %u)\n", s, lx[s], ly[s], frame); }
+        Touch(fake_env, NULL, TOUCH_UP, 1000, s, FBITS(lx[s]), FBITS(ly[s]), 0); on[s] = 0;
+      }
+    }
+    if (Accel && (frame & 1)) {   // ~30Hz accelerometer from the Vita's motion sensor, in m/s^2 like Android
+      SceMotionState ms; if (sceMotionGetState(&ms) >= 0) {
+        union { float f; uintptr_t u; } ax = { ms.acceleration.x * 9.81f }, ay = { ms.acceleration.y * 9.81f }, az = { ms.acceleration.z * 9.81f };
+        Accel(fake_env, NULL, ax.u, ay.u, az.u, 0, 0, 0);
+        { static int n; if (n++ < 3) debugPrintf("accel: %.2f %.2f %.2f\n", ax.f, ay.f, az.f); }
+      }
     }
     if (jni_video_play_pending && !video_done_at) video_done_at = frame + 30;   // let the player register, then "finish" the movie
     if (video_done_at && frame >= (unsigned)video_done_at) {
