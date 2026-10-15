@@ -399,6 +399,11 @@ int main(int argc, char *argv[]) {
   int touching = 0; unsigned frame = 0;
   extern int jni_video_play_pending; int video_done_at = 0;
   fn_jni VideoDone = J("Java_com_ea_VideoPlayer_PlayerAndroid_OnCompletionNativeImpl");
+  typedef void (*fn_jni7)(void *env, void *thiz, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+  fn_jni7 Mouse = (fn_jni7)J("Java_com_ea_blast_MouseAndroid_NativeOnMouseEvent");   // (env, thiz, id, button, c, d, wheel, float x, float y); ids Down 0x2000B Move 0xB Up 0x4000B
+  #define MOUSE_DOWN 0x2000B
+  #define MOUSE_MOVE 0xB
+  #define MOUSE_UP   0x4000B
   fn_jni BackKey = J("Java_com_ea_ssx_MainActivity_OnBackSoftKey");               // Android BACK: dismisses popups/hint panels
   fn_jni Accel = J("Java_com_ea_blast_AccelerometerAndroidDelegate_NativeOnAcceleration");   // (env, thiz, float x, float y, float z)
   sceMotionStartSampling();
@@ -434,11 +439,13 @@ int main(int argc, char *argv[]) {
         seen[slot] = 1;
         if (!on[slot]) { static int n; if (n++ < 300) debugPrintf("input: touch%d down %.0f,%.0f (frame %u)\n", slot, x, y, frame); }
         Touch(fake_env, NULL, on[slot] ? TOUCH_MOVE : TOUCH_DOWN, 1000, slot, FBITS(x), FBITS(y), 0);
+        if (slot == 0 && Mouse) Mouse(fake_env, NULL, on[0] ? MOUSE_MOVE : MOUSE_DOWN, 1, 0, 0, 0, FBITS(x), FBITS(y));   // Blast's Java layer mirrors finger 0 as a left-button mouse (Scaleform UI listens to mouse)
         on[slot] = 1; vid[slot] = td.report[r].id; lx[slot] = x; ly[slot] = y;
       }
       for (int s = 0; s < 2; s++) if (on[s] && !seen[s]) {
         { static int n; if (n++ < 300) debugPrintf("input: touch%d up %.0f,%.0f (frame %u)\n", s, lx[s], ly[s], frame); }
         Touch(fake_env, NULL, TOUCH_UP, 1000, s, FBITS(lx[s]), FBITS(ly[s]), 0); on[s] = 0;
+        if (s == 0 && Mouse) Mouse(fake_env, NULL, MOUSE_UP, 1, 0, 0, 0, FBITS(lx[0]), FBITS(ly[0]));
       }
     }
     if (Accel && (frame & 1)) {   // ~30Hz accelerometer from the Vita's motion sensor, in m/s^2 like Android
