@@ -285,6 +285,16 @@ int main(int argc, char *argv[]) {
   sceIoMkdir(DATA_PATH, 0777); sceIoMkdir(DATA_PATH "/internal", 0777); sceIoMkdir(DATA_PATH "/obb", 0777);
   // keep the previous run's log: a relaunch after a crash no longer wipes the evidence
   sceIoRemove(DATA_PATH "/ssx_prev.log"); sceIoRename(DATA_PATH "/ssx.log", DATA_PATH "/ssx_prev.log"); sceIoRemove("ux0:data/ssx.log");
+  { // Saves written by builds with the bionic-stat bug carry a garbage size (a 25MB "ghosts" file): loading one OOMs
+    // the Global pool. Drop any save file over 4MB; the game recreates them.
+    SceUID d = sceIoDopen(DATA_PATH "/internal/ssxv"); SceIoDirent e;
+    while (d >= 0 && sceIoDread(d, &e) > 0) {
+      if (SCE_S_ISDIR(e.d_stat.st_mode) || e.d_stat.st_size <= 4 * 1024 * 1024) continue;
+      char p[512]; snprintf(p, sizeof p, DATA_PATH "/internal/ssxv/%s", e.d_name); sceIoRemove(p);
+      debugPrintf("removed oversized save %s (%lld bytes)\n", e.d_name, (long long)e.d_stat.st_size);
+    }
+    if (d >= 0) sceIoDclose(d);
+  }
 #ifndef BUILD_ID
 #define BUILD_ID "dev"
 #endif
