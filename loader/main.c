@@ -285,11 +285,11 @@ int main(int argc, char *argv[]) {
   sceIoMkdir(DATA_PATH, 0777); sceIoMkdir(DATA_PATH "/internal", 0777); sceIoMkdir(DATA_PATH "/obb", 0777);
   // keep the previous run's log: a relaunch after a crash no longer wipes the evidence
   sceIoRemove(DATA_PATH "/ssx_prev.log"); sceIoRename(DATA_PATH "/ssx.log", DATA_PATH "/ssx_prev.log"); sceIoRemove("ux0:data/ssx.log");
-  { // Saves written by builds with the bionic-stat bug carry a garbage size (a 25MB "ghosts" file): loading one OOMs
-    // the Global pool. Drop any save file over 4MB; the game recreates them.
+  { // The 25MB ghosts save is legit (Global pool is 45M to load it); only drop saves corrupted to absurd sizes. Loading one OOMs
+    // the Global pool. Drop any save file over 32MB; the game recreates them.
     SceUID d = sceIoDopen(DATA_PATH "/internal/ssxv"); SceIoDirent e;
     while (d >= 0 && sceIoDread(d, &e) > 0) {
-      if (SCE_S_ISDIR(e.d_stat.st_mode) || e.d_stat.st_size <= 4 * 1024 * 1024) continue;
+      if (SCE_S_ISDIR(e.d_stat.st_mode) || e.d_stat.st_size <= 32 * 1024 * 1024) continue;
       char p[512]; snprintf(p, sizeof p, DATA_PATH "/internal/ssxv/%s", e.d_name); sceIoRemove(p);
       debugPrintf("removed oversized save %s (%lld bytes)\n", e.d_name, (long long)e.d_stat.st_size);
     }
@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
   debugPrintf("clocks: arm %d bus %d gpu %d xbar %d\n", scePowerGetArmClockFrequency(), scePowerGetBusClockFrequency(), scePowerGetGpuClockFrequency(), scePowerGetGpuXbarClockFrequency());
   debugPrintf("vitaGL init...\n");
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 22 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 22MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc; 32MB left ~17MB unused (free user)
-  debugPrintf("vitaGL ok\n");
+  debugPrintf("vitaGL ok: pools vram %uKB ram %uKB phycont %uKB budget %uKB\n", (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024, (unsigned)vglMemFree(VGL_MEM_PHYCONT)/1024, (unsigned)vglMemFree(VGL_MEM_BUDGET)/1024);
   glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default viewport is 0x0 and the game never sets one; must come AFTER vglInit
 
   // 4. JNI boot sequence (order taken from Blast's MainActivity.onCreate / MainThread.run).

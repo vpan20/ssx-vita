@@ -232,9 +232,24 @@ int unlink_fix(const char *p) { char b[512]; return unlink(fix_path(p, b, sizeof
 int remove_fix(const char *p) { char b[512]; return remove(fix_path(p, b, sizeof b)); }
 int rename_fix(const char *a, const char *c) { char b1[512], b2[512]; return rename(fix_path(a, b1, sizeof b1), fix_path(c, b2, sizeof b2)); }
 // malloc/free with logging of large requests (game heaps are carved with malloc)
-void *malloc_log(size_t n) { void *p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
+// Big game pools (>=20MB, allocated once at boot) are served from VitaGL's otherwise idle phycont (~26MB) and
+// cdialog-budget (~9MB) pools before touching the newlib heap, which the game's other pools fill to the byte.
+// Only the 26MB GameWorld::SlotAlloc slab fits phycont; everything else falls through to newlib unchanged.
+static struct { void *p; size_t n; } big_tab[8]; static int big_n;
+static void *big_alloc(size_t n) {
+  if (n < 20u * 1024 * 1024 || big_n >= 8) return NULL;
+  void *p = vglAlloc(n, VGL_MEM_PHYCONT); int pool = 2;
+  if (!p) { p = vglAlloc(n, VGL_MEM_BUDGET); pool = 3; }
+  if (!p) return NULL;
+  big_tab[big_n].p = p; big_tab[big_n].n = n; big_n++;
+  debugPrintf("big alloc %uKB -> VitaGL pool %d at %p (phycont free %uKB budget free %uKB)\n", (unsigned)(n / 1024), pool, p, (unsigned)vglMemFree(VGL_MEM_PHYCONT) / 1024, (unsigned)vglMemFree(VGL_MEM_BUDGET) / 1024);
+  return p;
+}
+static int big_free(void *p) { for (int i = 0; i < big_n; i++) if (big_tab[i].p == p) { vglFree(p); big_tab[i] = big_tab[--big_n]; return 1; } return 0; }
+void free_big(void *p) { if (p && big_free(p)) return; free(p); }
+void *malloc_log(size_t n) { void *p = big_alloc(n); if (!p) p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
 void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
-void *memalign_log(size_t al, size_t n) { void *p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
+void *memalign_log(size_t al, size_t n) { void *p = al <= 4096 ? big_alloc(n) : NULL; if (!p) p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
 // GL wrappers (gl_lock.c)
 extern void *egl_get_proc_address_shim(const char *);
 extern void glActiveTexture_locked();
@@ -482,7 +497,7 @@ so_default_dynlib default_dynlib[] = {
   { "fputc", (uintptr_t)&fputc },
   { "fputs", (uintptr_t)&fputs },
   { "fread", (uintptr_t)&fread },
-  { "free", (uintptr_t)&free },
+  { "free", (uintptr_t)&free_big },
   { "freeaddrinfo", (uintptr_t)&freeaddrinfo },
   { "freopen", (uintptr_t)&freopen },
   { "frexp", (uintptr_t)&frexp },
