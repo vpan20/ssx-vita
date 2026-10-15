@@ -396,7 +396,11 @@ int main(int argc, char *argv[]) {
     if (PadDown && PadUp) {
       unsigned changed = pad.buttons ^ prev_buttons;
       for (unsigned i = 0; i < sizeof padmap / sizeof padmap[0]; i++)
-        if (changed & padmap[i].vita) (pad.buttons & padmap[i].vita ? PadDown : PadUp)(fake_env, NULL, 0, padmap[i].key, 0,0,0,0);
+        if (changed & padmap[i].vita) {
+          int down = (pad.buttons & padmap[i].vita) != 0;
+          { static int n; if (n++ < 300) debugPrintf("input: key %d %s (frame %u)\n", padmap[i].key, down ? "down" : "up", frame); }
+          (down ? PadDown : PadUp)(fake_env, NULL, 0, padmap[i].key, 0,0,0,0);
+        }
       prev_buttons = pad.buttons;
     }
     if (PadAxis) {   // Android axes: 0=X 1=Y 11=Z 14=RZ ; value -1..1
@@ -408,18 +412,29 @@ int main(int argc, char *argv[]) {
     if (Touch) {
       static float lx, ly;
       if (td.reportNum > 0) { float x = td.report[0].x / 1920.0f * SCREEN_W, y = td.report[0].y / 1088.0f * SCREEN_H;
+        if (!touching) { static int n; if (n++ < 300) debugPrintf("input: touch down %.0f,%.0f (frame %u)\n", x, y, frame); }
         Touch(fake_env, NULL, touching ? TOUCH_MOVE : TOUCH_DOWN, 1000, 0, FBITS(x), FBITS(y), 0); touching = 1; lx = x; ly = y; }
-      else if (touching) { Touch(fake_env, NULL, TOUCH_UP, 1000, 0, FBITS(lx), FBITS(ly), 0); touching = 0; }
+      else if (touching) { { static int n; if (n++ < 300) debugPrintf("input: touch up %.0f,%.0f (frame %u)\n", lx, ly, frame); } Touch(fake_env, NULL, TOUCH_UP, 1000, 0, FBITS(lx), FBITS(ly), 0); touching = 0; }
     }
     if (jni_video_play_pending && !video_done_at) video_done_at = frame + 30;   // let the player register, then "finish" the movie
     if (video_done_at && frame >= (unsigned)video_done_at) {
       video_done_at = 0; jni_video_play_pending = 0;
       if (VideoDone) { for (int id = 0; id < 4; id++) VideoDone(fake_env, NULL, id, 0,0,0,0,0); debugPrintf("video: reported completion\n"); }
     }
+    SceUInt64 t0 = sceKernelGetProcessTimeWide();
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
+    SceUInt64 t1 = sceKernelGetProcessTimeWide();
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }
     extern void gl_lock_acquire(void), gl_lock_release(void);
     gl_lock_acquire(); vglSwapBuffers(GL_FALSE); gl_lock_release();
+    { // frame timing: per 100 frames, avg/max of game update+render (DrawFrame) and of the swap, plus frames over 33ms
+      static SceUInt64 last, sum_d, sum_s, max_d, max_s, max_f; static unsigned slow, n;
+      SceUInt64 t2 = sceKernelGetProcessTimeWide(), d = t1 - t0, sw = t2 - t1, fr = last ? t2 - last : 0; last = t2;
+      sum_d += d; sum_s += sw; if (d > max_d) max_d = d; if (sw > max_s) max_s = sw; if (fr > max_f) max_f = fr; if (fr > 33333) slow++; n++;
+      if (frame % 100 == 0) { debugPrintf("timing: frame %u avg %.1fms (draw %.1f max %.1f, swap %.1f max %.1f) worst frame %.1fms, %u/%u frames >33ms\n", frame,
+          (sum_d + sum_s) / 1000.0 / n, sum_d / 1000.0 / n, max_d / 1000.0, sum_s / 1000.0 / n, max_s / 1000.0, max_f / 1000.0, slow, n);
+        sum_d = sum_s = max_d = max_s = max_f = 0; slow = n = 0; }
+    }
     { extern void gl_frame_summary(unsigned); gl_frame_summary(frame - 1); }
     if (frame <= 5) debugPrintf("  frame %u swapped\n", frame - 1);
   }

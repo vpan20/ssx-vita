@@ -8,6 +8,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <setjmp.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -181,7 +182,17 @@ const char *fix_path(const char *p, char *out, size_t n) {
   return p;
 }
 FILE *fopen_log(const char *p, const char *m) { char b[512]; const char *q = fix_path(p, b, sizeof b); FILE *f = fopen(q, m); debugPrintf("fopen(%s,%s) -> %p\n", q, m, f); return f; }
-int open_log(const char *p, int f, ...) { char b[512]; const char *q = fix_path(p, b, sizeof b); int fd = open(q, f, 0777); debugPrintf("open(%s) -> %d\n", q, fd); return fd; }
+// open(2) flags differ between bionic and newlib: bionic O_CREAT 0x40 O_EXCL 0x80 O_TRUNC 0x200 O_APPEND 0x400. Passed through raw,
+// the game's create-for-write (save profile) arrived as "truncate, no create" and failed with -1 -> save/load popup stuck.
+static int bionic_oflags(int f) {
+  int nf = f & 3;                       // O_RDONLY/O_WRONLY/O_RDWR are the same
+  if (f & 0x40)  nf |= O_CREAT;
+  if (f & 0x80)  nf |= O_EXCL;
+  if (f & 0x200) nf |= O_TRUNC;
+  if (f & 0x400) nf |= O_APPEND;
+  return nf;
+}
+int open_log(const char *p, int f, ...) { char b[512]; const char *q = fix_path(p, b, sizeof b); int fd = open(q, bionic_oflags(f), 0777); debugPrintf("open(%s, 0x%X) -> %d\n", q, f, fd); return fd; }
 DIR *opendir_fix(const char *p) { char b[512]; const char *q = fix_path(p, b, sizeof b); DIR *d = opendir(q); debugPrintf("opendir(%s) -> %p\n", q, d); return d; }
 int stat_fix(const char *p, struct stat *s) { char b[512]; return stat(fix_path(p, b, sizeof b), s); }
 int mkdir_fix(const char *p, int mode) { char b[512]; const char *q = fix_path(p, b, sizeof b); int r = mkdir(q, mode); debugPrintf("mkdir(%s) -> %d\n", q, r); return r; }
