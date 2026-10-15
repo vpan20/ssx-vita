@@ -176,6 +176,8 @@ extern void sem_wait_bridge();
 const char *fix_path(const char *p, char *out, size_t n) {
   if (p && !strncmp(p, "/data/ssx/", 10)) { snprintf(out, n, DATA_PATH "/%s", p + 10); return out; }
   if (p && !strcmp(p, "/data/ssx")) { snprintf(out, n, DATA_PATH); return out; }
+  // Relative paths (MemoryExhausted.xml, GFxShaders.cache, Lua's "./x.lua") have no cwd on the Vita and always fail: root them in DATA_PATH.
+  if (p && *p && *p != '/' && !strchr(p, ':')) { if (p[0] == '.' && p[1] == '/') p += 2; snprintf(out, n, DATA_PATH "/%s", p); return out; }
   return p;
 }
 FILE *fopen_log(const char *p, const char *m) { char b[512]; const char *q = fix_path(p, b, sizeof b); FILE *f = fopen(q, m); debugPrintf("fopen(%s,%s) -> %p\n", q, m, f); return f; }

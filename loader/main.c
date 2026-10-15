@@ -20,7 +20,7 @@
 #define SCREEN_H 544
 #define LOAD_ADDR_GAME   0x94000000
 #define LOAD_ADDR_GNUSTL 0x9C000000   // libgame.so is ~40MB mapped; keep gnustl clear of it
-#define MEMORY_NEWLIB_MB 272   // game pools + Render budget (globe FE OOMs Render at 24M on a 240MB heap); VitaGL RAM pool shrinks to ~17MB (it uses <2MB; textures live in VRAM)
+#define MEMORY_NEWLIB_MB 294   // +22MB for GameWorld::SlotAlloc 26M (Alps race asks 24.6MB in one block); VitaGL RAM pool ~13MB (uses ~2MB)
 #define MEMORY_VITAGL_MB 16          // tune: game streams textures from .big caches
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
@@ -317,7 +317,7 @@ int main(int argc, char *argv[]) {
   scePowerSetArmClockFrequency(444); scePowerSetBusClockFrequency(222); scePowerSetGpuClockFrequency(222); scePowerSetGpuXbarClockFrequency(166);
   debugPrintf("clocks: arm %d bus %d gpu %d xbar %d\n", scePowerGetArmClockFrequency(), scePowerGetBusClockFrequency(), scePowerGetGpuClockFrequency(), scePowerGetGpuXbarClockFrequency());
   debugPrintf("vitaGL init...\n");
-  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 32 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 32MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc must fit
+  vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 22 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 22MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc; 32MB left ~17MB unused (free user)
   debugPrintf("vitaGL ok\n");
   glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default viewport is 0x0 and the game never sets one; must come AFTER vglInit
 
