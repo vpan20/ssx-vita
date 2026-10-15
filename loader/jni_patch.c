@@ -207,7 +207,7 @@ static const struct { const char *n; int id; } special[] = {
 
 
 // ---- full Blast delegate surface (extracted from the binary's GetMethodId call sites) ----
-static float f_dpi(void)        { return 160.0f; }   // 256 (real XT910) made the tutorial hint panel ~1.6x too large: its NEXT/BACK buttons sat off-screen. Scaleform sizes dp-based UI by this.
+static float f_dpi(void)        { return 256.0f; }   // real XT910 value; 160 made no difference to the hint panel
 static float f_battery(void)    { return 1.0f; }
 static int  *empty_str_array(void) { static int a[1] = { 0 }; return a; }
 static int   gl_view(void)      { return 1; }

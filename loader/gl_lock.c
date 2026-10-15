@@ -13,6 +13,7 @@ void debugPrintf(const char *fmt, ...);
 void glCompileShader_log(GLuint shader); void glLinkProgram_log(GLuint prog); void glShaderSource_log(GLuint shader, GLsizei count, const GLchar **string, const GLint *length);
 // per-frame GL activity summary (printed by main loop via gl_frame_summary)
 static unsigned c_alloc_n[5], c_alloc_kb[5]; static unsigned c_alloc_big_logged;
+static unsigned c_vp_fit;
 static unsigned c_texsub_calls, c_texsub_px, c_subdata_calls, c_subdata_bytes, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_viewport_w, c_viewport_h, cur_fbo;
 static float c_clear_r, c_clear_g, c_clear_b, c_clear_a;
 // Called by VitaGL (patched in CI) on every pool allocation: size, pool (0 VRAM 1 RAM 2 PHYCONT 3 BUDGET 4 newlib), caller.
@@ -28,9 +29,9 @@ void gl_frame_summary(unsigned frame) {
   if (frame < 12 || frame % 100 == 0)
     debugPrintf("vitaGL pools: vram free=%uKB ram free=%uKB\n", (unsigned)vglMemFree(VGL_MEM_VRAM) / 1024, (unsigned)vglMemFree(VGL_MEM_RAM) / 1024);
   if (frame < 12 || frame % 100 == 0)
-    debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u subData=%u calls/%uKB texSub=%u calls/%uKpx viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
-      frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_subdata_calls, c_subdata_bytes / 1024, c_texsub_calls, c_texsub_px / 1024, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
-  c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = c_subdata_calls = c_subdata_bytes = c_texsub_calls = c_texsub_px = 0;
+    debugPrintf("GL frame %u: draws=%u (to screen fbo0: %u) clears=%u fboBinds=%u usePrograms=%u texUploads=%u subData=%u calls/%uKB texSub=%u calls/%uKpx vpFit=%u viewport=%ux%u clearColor=(%.2f,%.2f,%.2f,%.2f) lastFbo=%u\n",
+      frame, c_draws, c_draws_fbo0, c_clears, c_fbobinds, c_useprog, c_texupload, c_subdata_calls, c_subdata_bytes / 1024, c_texsub_calls, c_texsub_px / 1024, c_vp_fit, c_viewport_w, c_viewport_h, c_clear_r, c_clear_g, c_clear_b, c_clear_a, cur_fbo);
+  c_draws = c_draws_fbo0 = c_clears = c_fbobinds = c_useprog = c_texupload = c_subdata_calls = c_subdata_bytes = c_texsub_calls = c_texsub_px = c_vp_fit = 0;
 }
 typedef struct { GLuint fbo; GLenum attachment; GLuint tex; GLint level; } fbo_attach_t;
 static fbo_attach_t fbo_attach_cache[256]; static int fbo_attach_n;
@@ -208,7 +209,7 @@ void glPolygonOffset_locked(GLfloat factor, GLfloat units) { pthread_mutex_lock(
 void glReadPixels_locked(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *data) { pthread_mutex_lock(&gl_lock); glReadPixels(x, y, width, height, format, type, data); pthread_mutex_unlock(&gl_lock); }
 void glReleaseShaderCompiler_locked(void) { pthread_mutex_lock(&gl_lock); glReleaseShaderCompiler(); pthread_mutex_unlock(&gl_lock); }
 void glRenderbufferStorage_locked(GLenum target, GLenum internalformat, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); { static int n; if (n++ < 40) debugPrintf("renderbuffer %dx%d fmt 0x%X -> vram %uKB\n", width, height, internalformat, (unsigned)vglMemFree(VGL_MEM_VRAM)/1024); } glRenderbufferStorage(target, internalformat, width, height); pthread_mutex_unlock(&gl_lock); }
-void glScissor_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); glScissor(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
+
 void glShaderBinary_locked(GLsizei count, const GLuint *handles, GLenum binaryFormat, const void *binary, GLsizei length) { pthread_mutex_lock(&gl_lock); glShaderBinary(count, handles, binaryFormat, binary, length); pthread_mutex_unlock(&gl_lock); }
 void glShaderSource_locked(GLuint handle, GLsizei count, const GLchar *const *string, const GLint *length) { pthread_mutex_lock(&gl_lock); glShaderSource_log(handle, count, (const GLchar **)string, length); pthread_mutex_unlock(&gl_lock); }
 void glStencilFunc_locked(GLenum func, GLint ref, GLuint mask) { pthread_mutex_lock(&gl_lock); glStencilFunc(func, ref, mask); pthread_mutex_unlock(&gl_lock); }
@@ -251,7 +252,24 @@ void glVertexAttrib3fv_locked(GLuint index, const GLfloat *v) { pthread_mutex_lo
 void glVertexAttrib4f_locked(GLuint index, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3) { pthread_mutex_lock(&gl_lock); glVertexAttrib4f(index, v0, v1, v2, v3); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttrib4fv_locked(GLuint index, const GLfloat *v) { pthread_mutex_lock(&gl_lock); glVertexAttrib4fv(index, v); pthread_mutex_unlock(&gl_lock); }
 void glVertexAttribPointer_locked(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer) { pthread_mutex_lock(&gl_lock); glVertexAttribPointer(index, size, type, normalized, stride, pointer); pthread_mutex_unlock(&gl_lock); }
-void glViewport_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); c_viewport_w = width; c_viewport_h = height; glViewport(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
+// Screen-space rects larger than the display (the FE's hint/tutorial overlay sets a 1280x720 viewport straight on the
+// default framebuffer) are scaled to fit 960x544; otherwise everything beyond 960x544 — the panel's image and its
+// NEXT/BACK buttons — is simply clipped. Off-screen render targets are left alone.
+#define DISP_W 960
+#define DISP_H 544
+static int fit_rect(GLint *x, GLint *y, GLsizei *w, GLsizei *h) {
+  if (cur_fbo != 0 || (*w <= DISP_W && *h <= DISP_H)) return 0;
+  float sx = (float)DISP_W / *w, sy = (float)DISP_H / *h, s = sx < sy ? sx : sy;
+  GLsizei nw = (GLsizei)(*w * s + 0.5f), nh = (GLsizei)(*h * s + 0.5f);
+  *x = (GLint)(*x * s) + (DISP_W - nw) / 2; *y = (GLint)(*y * s) + (DISP_H - nh) / 2; *w = nw; *h = nh;
+  return 1;
+}
+void glViewport_locked(GLint x, GLint y, GLsizei width, GLsizei height) {
+  pthread_mutex_lock(&gl_lock);
+  if (fit_rect(&x, &y, &width, &height)) { c_vp_fit++; static int n; if (n++ < 10) debugPrintf("viewport on screen > display: scaled to %dx%d at %d,%d\n", width, height, x, y); }
+  c_viewport_w = width; c_viewport_h = height; glViewport(x, y, width, height); pthread_mutex_unlock(&gl_lock);
+}
+void glScissor_locked(GLint x, GLint y, GLsizei width, GLsizei height) { pthread_mutex_lock(&gl_lock); fit_rect(&x, &y, &width, &height); glScissor(x, y, width, height); pthread_mutex_unlock(&gl_lock); }
 
 // ---- eglGetProcAddress shim: map ES extension names Scaleform asks for onto VitaGL's core implementations, locked ----
 #include <string.h>
