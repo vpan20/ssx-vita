@@ -264,7 +264,16 @@ static void hook_SfUnmap(void *self) {
     self, s[1], s[5], s[6], s[10], hal, obj, vt, fn, fn >= game_mod.text_base ? (unsigned)(fn - game_mod.text_base) : 0);
   orig_SfUnmap(self);
 }
+// FMTutorialManager::FETutorialCheck(this, key&, bool) -> tutorial attrib instance or 0. The front-end tutorial popups
+// ("Tutorial: World Tour") render with their NEXT/BACK buttons off-screen on the Vita and cannot be dismissed, so the
+// globe is unusable. Report "no tutorial for this key": RequestHintScreenInBackEnd then returns without showing one.
+static void *(*orig_FETutorialCheck)(void *, void *, int);
+static void *hook_FETutorialCheck(void *self, void *key, int b) {
+  static int n; if (n++ < 20) debugPrintf("FETutorialCheck(key %08X) suppressed\n", key ? *(uint32_t *)key : 0);
+  return NULL;
+}
 static void install_hooks(void) {
+  HOOK(0x1b7968, hook_FETutorialCheck, orig_FETutorialCheck);
   HOOK(0xa3b18c, hook_SfUnmap, orig_SfUnmap);
   HOOK(0x14b888, hook_OutOfMemory, orig_OutOfMemory);
   HOOK(0x6438c0, hook_LoadingUpdate, orig_LoadingUpdate);
