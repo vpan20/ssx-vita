@@ -283,7 +283,8 @@ int main(int argc, char *argv[]) {
   sceKernelChangeThreadCpuAffinityMask(0, 0x40000);   // pin main thread; game spawns its own worker threads
   sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
   sceIoMkdir(DATA_PATH, 0777); sceIoMkdir(DATA_PATH "/internal", 0777); sceIoMkdir(DATA_PATH "/obb", 0777);
-  sceIoRemove(DATA_PATH "/ssx.log"); sceIoRemove("ux0:data/ssx.log");
+  // keep the previous run's log: a relaunch after a crash no longer wipes the evidence
+  sceIoRemove(DATA_PATH "/ssx_prev.log"); sceIoRename(DATA_PATH "/ssx.log", DATA_PATH "/ssx_prev.log"); sceIoRemove("ux0:data/ssx.log");
 #ifndef BUILD_ID
 #define BUILD_ID "dev"
 #endif
