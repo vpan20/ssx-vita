@@ -195,7 +195,7 @@ static int bionic_oflags(int f) {
 // Save-file I/O tracing (internal/ssxv/*). The game writes a ~25MB "Personal Best Ghosts" save while loading a race and then
 // can't afford the 25MB 'SaveLoadFileBuffer' (Global pool) to read it back. Log every write/seek/truncate on save files and
 // cap the ghosts file at GHOST_CAP bytes (writes past the cap are reported as done but not stored).
-#define GHOST_CAP (64 * 1024 * 1024)   // effectively off: GLOBAL_GEN 45M (commit 18569a5) can hold the 25MB read buffer. Set to 1MB to force a small ghosts file.
+#define GHOST_CAP (64 * 1024 * 1024)   // effectively off: GLOBAL_GEN 32M holds the 25MB SaveLoadFileBuffer (~6MB headroom over the measured ~26MB peak). If Global must shrink, set to 1MB to force a small ghosts file.
 static unsigned char save_fd[256];   // 1 = save file, 2 = ghosts save
 static int save_log_n;
 #define SAVE_LOG(...) do { if (save_log_n++ < 400) debugPrintf(__VA_ARGS__); } while (0)

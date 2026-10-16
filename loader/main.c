@@ -3,6 +3,9 @@
 #include <vitasdk.h>
 #include <psp2/power.h>
 #include <psp2/motion.h>
+#ifndef SSX_ACCEL   // accelerometer feed off until a race verifies axes/signs: Android axes are portrait-relative, the Vita's landscape; raw values would read as a tilt
+#define SSX_ACCEL 0
+#endif
 #include <malloc.h>
 #include <kubridge.h>
 #include <vitaGL.h>
@@ -272,41 +275,41 @@ static void *hook_FETutorialCheck(void *self, void *key, int b) {
   static int n; if (n++ < 20) debugPrintf("FETutorialCheck(key %08X) suppressed\n", key ? *(uint32_t *)key : 0);
   return NULL;
 }
-// ---- MemoryFramework category accounting: current/peak bytes per category (name lives at category+0x1E0) ----
+// ---- MemoryFramework category discovery + per-category stats (name lives at category+0x1E0) ----
+// Only the two Category::Alloc entry points are hooked, and only to learn which category objects exist; the numbers come from
+// the game's own Category::GetStatistics. (Per-alloc/free accounting cost a trampoline + table scan on every allocation and
+// raced across threads.) Discovery is lock-protected and rare; the fast path is a lock-free check of the last-seen category.
 #define MEMCAT_MAX 64
-static struct { void *cat; unsigned cur, peak; } memcat[MEMCAT_MAX]; static int memcat_n;
-static unsigned (*cat_usable_size)(void *, void *);
-static void memcat_add(void *cat, int delta) {
-  int i; for (i = 0; i < memcat_n; i++) if (memcat[i].cat == cat) break;
-  if (i == memcat_n) { if (memcat_n >= MEMCAT_MAX) return; memcat[memcat_n++].cat = cat; }
-  unsigned c = memcat[i].cur; c = delta < 0 && (unsigned)(-delta) > c ? 0 : c + delta; memcat[i].cur = c; if (c > memcat[i].peak) memcat[i].peak = c;
+static void *memcat[MEMCAT_MAX]; static volatile int memcat_n; static void *volatile memcat_last;
+static SceKernelLwMutexWork memcat_lock; static int memcat_lock_init;
+static void memcat_seen(void *cat) {
+  if (!cat || cat == memcat_last) return;
+  int n = memcat_n; for (int i = 0; i < n; i++) if (memcat[i] == cat) { memcat_last = cat; return; }
+  if (!memcat_lock_init) return;
+  sceKernelLockLwMutex(&memcat_lock, 1, NULL);
+  int i; for (i = 0; i < memcat_n; i++) if (memcat[i] == cat) break;
+  if (i == memcat_n && memcat_n < MEMCAT_MAX) { memcat[memcat_n] = cat; memcat_n = memcat_n + 1; }
+  sceKernelUnlockLwMutex(&memcat_lock, 1);
+  memcat_last = cat;
 }
 static void (*cat_get_stats)(void *out, void *cat, int refresh);   // MemoryFramework::Category::GetStatistics(bool): sret 7 words summed over the category's allocators
 void memcat_report(void) {
-  for (int i = 0; i < memcat_n; i++) {
-    const char *nm = (const char *)memcat[i].cat + 0x1E0; if (!*nm) nm = "?";
-    unsigned st[7] = { 0 }; if (cat_get_stats) cat_get_stats(st, memcat[i].cat, 1);
-    debugPrintf("memstat %-24s stats(KB) %u %u %u %u %u %u %u | allocated-ever %uKB\n", nm, st[0] / 1024, st[1] / 1024, st[2] / 1024, st[3] / 1024, st[4] / 1024, st[5] / 1024, st[6] / 1024, memcat[i].peak / 1024);
+  int n = memcat_n;
+  for (int i = 0; i < n; i++) {
+    const char *nm = (const char *)memcat[i] + 0x1E0; if (!*nm) nm = "?";
+    unsigned st[7] = { 0 }; if (cat_get_stats) cat_get_stats(st, memcat[i], 1);
+    debugPrintf("memstat %-24s stats(KB) %u %u %u %u %u %u %u\n", nm, st[0] / 1024, st[1] / 1024, st[2] / 1024, st[3] / 1024, st[4] / 1024, st[5] / 1024, st[6] / 1024);
   }
 }
 static void *(*orig_CatAlloc5)(void *, unsigned, const char *, unsigned, unsigned, unsigned);
-static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { void *p = orig_CatAlloc5(cat, size, name, a, b, c); if (p) memcat_add(cat, (int)size); return p; }
+static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); return orig_CatAlloc5(cat, size, name, a, b, c); }
 static void *(*orig_CatAlloc2)(void *, unsigned, const char *);
-static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { void *p = orig_CatAlloc2(cat, size, name); if (p) memcat_add(cat, (int)size); return p; }
-static void *(*orig_CatFastAlloc)(void *, unsigned);
-static void *hook_CatFastAlloc(void *cat, unsigned size) { void *p = orig_CatFastAlloc(cat, size); if (p) memcat_add(cat, (int)size); return p; }
-static void (*orig_CatFree)(void *, void *);
-static void hook_CatFree(void *cat, void *p) { if (p && cat_usable_size) memcat_add(cat, -(int)cat_usable_size(cat, p)); orig_CatFree(cat, p); }
-static void (*orig_CatFastFree)(void *, void *);
-static void hook_CatFastFree(void *cat, void *p) { if (p && cat_usable_size) memcat_add(cat, -(int)cat_usable_size(cat, p)); orig_CatFastFree(cat, p); }
+static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); return orig_CatAlloc2(cat, size, name); }
 static void install_hooks(void) {
-  cat_usable_size = (unsigned (*)(void *, void *))(game_mod.text_base + 0x14f240);
+  sceKernelCreateLwMutex(&memcat_lock, "memcat", 0, 0, NULL); memcat_lock_init = 1;
   cat_get_stats = (void (*)(void *, void *, int))(game_mod.text_base + 0x14f2e0);
   HOOK(0x14ef4c, hook_CatAlloc5, orig_CatAlloc5);
   HOOK(0x14ee2c, hook_CatAlloc2, orig_CatAlloc2);
-  HOOK(0x14ed54, hook_CatFastAlloc, orig_CatFastAlloc);
-  HOOK(0x14f214, hook_CatFree, orig_CatFree);
-  HOOK(0x14edcc, hook_CatFastFree, orig_CatFastFree);
   HOOK(0x1b7968, hook_FETutorialCheck, orig_FETutorialCheck);
   HOOK(0xa3b18c, hook_SfUnmap, orig_SfUnmap);
   HOOK(0x14b888, hook_OutOfMemory, orig_OutOfMemory);
@@ -449,6 +452,7 @@ int main(int argc, char *argv[]) {
   #define MOUSE_UP   0x4000B
   fn_jni BackKey = J("Java_com_ea_ssx_MainActivity_OnBackSoftKey");               // Android BACK: dismisses popups/hint panels
   fn_jni Accel = J("Java_com_ea_blast_AccelerometerAndroidDelegate_NativeOnAcceleration");   // (env, thiz, float x, float y, float z)
+  { static int logged; if (!logged++) debugPrintf("accel: %s\n", SSX_ACCEL ? "on" : "off (build with -DSSX_ACCEL=1)"); }
   sceMotionStartSampling();
   for (;;) {
     if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); struct mallinfo mi = mallinfo(); void *probe = malloc(1 << 20); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB) newlib heap: used %uKB free %uKB arena %uKB 1MB-probe %s\n", frame, fi.size_user / 1024, fi.size_cdram / 1024, (unsigned)mi.uordblks / 1024, (unsigned)mi.fordblks / 1024, (unsigned)mi.arena / 1024, probe ? "ok" : "FAILED"); free(probe);
@@ -492,7 +496,7 @@ int main(int argc, char *argv[]) {
         if (s == 0 && Mouse) Mouse(fake_env, NULL, MOUSE_UP, 1, 0, 0, 0, FBITS(lx[0]), FBITS(ly[0]));
       }
     }
-    if (Accel && (frame & 1)) {   // ~30Hz accelerometer from the Vita's motion sensor, in m/s^2 like Android
+    if (SSX_ACCEL && Accel && (frame & 1)) {   // ~30Hz accelerometer from the Vita's motion sensor, in m/s^2 like Android
       SceMotionState ms; if (sceMotionGetState(&ms) >= 0) {
         union { float f; uintptr_t u; } ax = { ms.acceleration.x * 9.81f }, ay = { ms.acceleration.y * 9.81f }, az = { ms.acceleration.z * 9.81f };
         Accel(fake_env, NULL, ax.u, ay.u, az.u, 0, 0, 0);
