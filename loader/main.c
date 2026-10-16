@@ -312,22 +312,25 @@ static void memcat_trace(void *cat, unsigned size, const char *name, void *ra) {
 static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc5(cat, size, name, a, b, c); }
 static void *(*orig_CatAlloc2)(void *, unsigned, const char *);
 static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc2(cat, size, name); }
-// RNA::TexturePlatC keeps a CPU copy of every texture's pixels (this+0x40, allocated from the Render pool; 30MB+ for
-// one track load) so Android can re-upload after an EGL context loss. The Vita never loses its GL context, so once an
-// asset texture has been uploaded by LoadTextureCommon -> Flush() the copy is dead weight: free it. Dynamic/lockable
-// textures (created empty, written through AcquireSurface) are flushed from other callers and keep their copy.
-// Destroy() already tolerates a NULL copy. Allocator: *(g_rna_alloc_base + 0x6C), ICoreAllocator vtable slot 4 = Free(ptr, size).
-#define RNA_ALLOC_GLOBAL 0x17d0970
-#define LOADTEX_START 0xd40900
-#define LOADTEX_END   0xd41800
+// RNA::TexturePlatC keeps a CPU copy of every texture's pixels (this+0x40, from the Render pool; 30MB+ for one track
+// load) so Android can re-upload after an EGL context loss. The Vita never loses its context, so after Flush() has
+// uploaded a texture the copy is dead weight: free it. Every upload goes through Flush() (CreateInternal with data,
+// LoadTextureCommon, Bind when the GPU texture is missing). Lockable textures (Scaleform's glyph atlas) write through
+// AcquireSurface(): if that finds the copy gone it re-creates a zeroed one and marks the texture sticky so it is never
+// freed again (the first lock finds zeros, which is what the buffer held). Destroy() tolerates a NULL copy.
+#define RNA_ALLOC_GLOBAL 0x17d0970           // *(+0x6C) = RNA's ICoreAllocator; vtable: +8 Alloc(size,name,flags) +0x10 Free(ptr,size)
+#define TEXSET_N 2048
+static void *tex_sticky[TEXSET_N]; static int tex_sticky_n;
+static int tex_is_sticky(void *t) { for (int i = 0; i < tex_sticky_n; i++) if (tex_sticky[i] == t) return 1; return 0; }
+static void tex_set_sticky(void *t) { if (!tex_is_sticky(t) && tex_sticky_n < TEXSET_N) tex_sticky[tex_sticky_n++] = t; }
+static void tex_unsticky(void *t) { for (int i = 0; i < tex_sticky_n; i++) if (tex_sticky[i] == t) { tex_sticky[i] = tex_sticky[--tex_sticky_n]; return; } }
+static unsigned (*tex_data_size)(void *);
+static unsigned tex_copies_freed, tex_copy_bytes_freed, tex_copies_recreated;
 static void (*orig_TexFlush)(void *);
-static unsigned tex_copies_freed, tex_copy_bytes_freed;
 static void hook_TexFlush(void *tex) {
   orig_TexFlush(tex);
-  uintptr_t ra = (uintptr_t)__builtin_return_address(0) - game_mod.text_base;
-  if (ra < LOADTEX_START || ra >= LOADTEX_END) return;
   char **slot = (char **)((char *)tex + 0x40); char *buf = *slot;
-  if (!buf || !*(uint32_t *)((char *)tex + 0x3c)) return;   // nothing to free / GPU texture not created
+  if (!buf || !*(uint32_t *)((char *)tex + 0x3c) || tex_is_sticky(tex)) return;
   void *alloc = *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c); if (!alloc) return;
   unsigned size = *(uint32_t *)(buf - 0x10);
   void (*Free)(void *, void *, unsigned) = (void (*)(void *, void *, unsigned))(*(uintptr_t **)alloc)[4];
@@ -335,8 +338,27 @@ static void hook_TexFlush(void *tex) {
   tex_copies_freed++; tex_copy_bytes_freed += size;
   if (tex_copies_freed <= 10 || tex_copies_freed % 50 == 0) debugPrintf("texture CPU copy freed after upload: %uKB (total %u copies, %uKB)\n", size / 1024, tex_copies_freed, tex_copy_bytes_freed / 1024);
 }
+static void *(*orig_TexAcquire)(void *, void *, int, int, int, int);
+static void *hook_TexAcquire(void *tex, void *dev, int a, int b, int c, int d) {
+  char **slot = (char **)((char *)tex + 0x40);
+  tex_set_sticky(tex);
+  if (!*slot && tex_data_size) {
+    void *alloc = *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c);
+    unsigned size = tex_data_size(tex);
+    void *(*Alloc)(void *, unsigned, const char *, unsigned) = (void *(*)(void *, unsigned, const char *, unsigned))(*(uintptr_t **)alloc)[2];
+    char *raw = alloc ? Alloc(alloc, size + 0x10, NULL, 1) : NULL;
+    if (raw) { *(uint32_t *)raw = size; memset(raw + 0x10, 0, size); *slot = raw + 0x10; tex_copies_recreated++; debugPrintf("texture CPU copy re-created for lock: %uKB (tex %p)\n", size / 1024, tex); }
+    else debugPrintf("texture CPU copy re-create FAILED (%uKB)\n", size / 1024);
+  }
+  return orig_TexAcquire(tex, dev, a, b, c, d);
+}
+static void (*orig_TexDestroy)(void *);
+static void hook_TexDestroy(void *tex) { tex_unsticky(tex); orig_TexDestroy(tex); }
 static void install_hooks(void) {
+  tex_data_size = (unsigned (*)(void *))(game_mod.text_base + 0xd925b0);
   HOOK(0xd929e8, hook_TexFlush, orig_TexFlush);
+  HOOK(0xd86614, hook_TexAcquire, orig_TexAcquire);
+  HOOK(0xd99908, hook_TexDestroy, orig_TexDestroy);
   sceKernelCreateLwMutex(&memcat_lock, "memcat", 0, 0, NULL); memcat_lock_init = 1;
   cat_get_stats = (void (*)(void *, void *, int))(game_mod.text_base + 0x14f2e0);
   HOOK(0x14ef4c, hook_CatAlloc5, orig_CatAlloc5);
