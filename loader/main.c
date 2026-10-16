@@ -394,6 +394,12 @@ static void install_hooks(void) {
 
 static int file_exists(const char *p) { SceIoStat s; return sceIoGetstat(p, &s) >= 0; }
 
+extern void gl_lock_acquire(void), gl_lock_release(void);
+void loader_present(void) {
+  static unsigned n; n++;
+  gl_lock_acquire(); vglSwapBuffers(GL_FALSE); gl_lock_release();
+  if (n <= 3 || n == 100 || n == 1000) { extern volatile unsigned jni_swap_count; debugPrintf("present #%u (jni swaps %u) thread 0x%X\n", n, jni_swap_count, (unsigned)sceKernelGetThreadId()); }
+}
 int main(int argc, char *argv[]) {
   sceKernelChangeThreadCpuAffinityMask(0, 0x40000);   // pin main thread; game spawns its own worker threads
   sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
@@ -593,8 +599,9 @@ int main(int argc, char *argv[]) {
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
     SceUInt64 t1 = sceKernelGetProcessTimeWide();
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }
-    extern void gl_lock_acquire(void), gl_lock_release(void);
-    gl_lock_acquire(); vglSwapBuffers(GL_FALSE); gl_lock_release();
+    extern volatile unsigned jni_swap_count;
+    if (!jni_swap_count) loader_present();                 // game has not presented through EGL yet: keep the screen alive from here
+    else sceDisplayWaitVblankStartMulti(SSX_VSYNC_INTERVAL > 0 ? SSX_VSYNC_INTERVAL : 1);   // pace NativeOnDrawFrame like the old swap did; the render thread presents
     { // frame timing: per 100 frames, avg/max of game update+render (DrawFrame) and of the swap, plus frames over 33ms
       static SceUInt64 last, sum_d, sum_s, max_d, max_s, max_f; static unsigned slow, n;
       SceUInt64 t2 = sceKernelGetProcessTimeWide(), d = t1 - t0, sw = t2 - t1, fr = last ? t2 - last : 0; last = t2;
@@ -604,8 +611,9 @@ int main(int argc, char *argv[]) {
       // 300-frame trace (frames 1200-1499, normally the menu/globe): full frame, game work, sleeps/waits inside it, swap
       if (frame >= 1200 && frame < 1500) debugPrintf("ft %u frame %.1f draw %.1f (sleep %.1f/%u wait %.1f/%u) swap %.1f\n", frame, fr / 1000.0, d / 1000.0, sl / 1000.0, slc, wt / 1000.0, wtc, sw / 1000.0);
       sum_d += d; sum_s += sw; if (d > max_d) max_d = d; if (sw > max_s) max_s = sw; if (fr > max_f) max_f = fr; if (fr > 34000) slow++; n++;
-      if (frame % 100 == 0) { debugPrintf("timing: frame %u avg %.1fms (draw %.1f max %.1f [main sleep %.1f wait %.1f], swap %.1f max %.1f) worst frame %.1fms, %u/%u frames >34ms\n", frame,
-          (sum_d + sum_s) / 1000.0 / n, sum_d / 1000.0 / n, max_d / 1000.0, sum_sl / 1000.0 / n, sum_wt / 1000.0 / n, sum_s / 1000.0 / n, max_s / 1000.0, max_f / 1000.0, slow, n);
+      static unsigned js_last;
+      if (frame % 100 == 0) { debugPrintf("timing: frame %u avg %.1fms (draw %.1f max %.1f [main sleep %.1f wait %.1f], swap %.1f max %.1f) worst frame %.1fms, %u/%u frames >34ms, game presents %u\n", frame,
+          (sum_d + sum_s) / 1000.0 / n, sum_d / 1000.0 / n, max_d / 1000.0, sum_sl / 1000.0 / n, sum_wt / 1000.0 / n, sum_s / 1000.0 / n, max_s / 1000.0, max_f / 1000.0, slow, n, jni_swap_count - js_last); js_last = jni_swap_count;
         sum_d = sum_s = max_d = max_s = max_f = 0; sum_sl = sum_wt = 0; slow = n = 0; }
     }
     { extern void gl_frame_summary(unsigned); gl_frame_summary(frame - 1); }

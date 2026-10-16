@@ -33,6 +33,13 @@ static const char *proc_arch(void)     { return "armeabi-v7a"; }
 static const char *locale_str(void)    { return "en_US"; }
 static float density(void)          { return 1.0f; }
 static int egl_ok(void)             { return 1; }
+// The game renders on its own thread (FGGameRender) and presents through Java EGL10.eglSwapBuffers; the main thread's
+// NativeOnDrawFrame does ~0.1ms of work. Answering "ok" here and swapping from the main loop instead presented the back
+// buffer at an unrelated cadence - mid-frame or stale (0 draws between swaps) - which is the menu/load flicker.
+// Present here, on the game's own frame boundary; the main loop only swaps while the game has never presented itself.
+volatile unsigned jni_swap_count;
+extern void loader_present(void);
+static int egl_swap(void) { jni_swap_count++; loader_present(); return 1; }
 // EGL queries that must return real values. Java int[] arrays here are our [len][data...] layout: data at arr+1.
 #define EGL_WIDTH 0x3057
 #define EGL_HEIGHT 0x3056
@@ -226,7 +233,7 @@ static jni_method methods[] = {
   { "eglChooseConfig",      (uintptr_t)egl_choose_config }, { "eglGetConfigAttrib",(uintptr_t)egl_get_config_attrib },
   { "eglCreateContext",     (uintptr_t)ret1 }, { "eglCreateWindowSurface",(uintptr_t)ret1 },
   { "eglCreatePbufferSurface",(uintptr_t)ret1 },{ "eglMakeCurrent",   (uintptr_t)egl_ok },
-  { "eglSwapBuffers",       (uintptr_t)egl_ok }, { "eglDestroySurface",(uintptr_t)egl_ok },
+  { "eglSwapBuffers",       (uintptr_t)egl_swap }, { "eglDestroySurface",(uintptr_t)egl_ok },
   { "eglDestroyContext",    (uintptr_t)egl_ok }, { "eglTerminate",     (uintptr_t)egl_ok },
   { "eglQuerySurface",      (uintptr_t)egl_query_surface }, { "eglGetError",      (uintptr_t)ret0 },
   { "eglQueryContext",      (uintptr_t)egl_query_context },
