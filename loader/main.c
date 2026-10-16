@@ -312,7 +312,31 @@ static void memcat_trace(void *cat, unsigned size, const char *name, void *ra) {
 static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc5(cat, size, name, a, b, c); }
 static void *(*orig_CatAlloc2)(void *, unsigned, const char *);
 static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc2(cat, size, name); }
+// RNA::TexturePlatC keeps a CPU copy of every texture's pixels (this+0x40, allocated from the Render pool; 30MB+ for
+// one track load) so Android can re-upload after an EGL context loss. The Vita never loses its GL context, so once an
+// asset texture has been uploaded by LoadTextureCommon -> Flush() the copy is dead weight: free it. Dynamic/lockable
+// textures (created empty, written through AcquireSurface) are flushed from other callers and keep their copy.
+// Destroy() already tolerates a NULL copy. Allocator: *(g_rna_alloc_base + 0x6C), ICoreAllocator vtable slot 4 = Free(ptr, size).
+#define RNA_ALLOC_GLOBAL 0x17d0970
+#define LOADTEX_START 0xd40900
+#define LOADTEX_END   0xd41800
+static void (*orig_TexFlush)(void *);
+static unsigned tex_copies_freed, tex_copy_bytes_freed;
+static void hook_TexFlush(void *tex) {
+  orig_TexFlush(tex);
+  uintptr_t ra = (uintptr_t)__builtin_return_address(0) - game_mod.text_base;
+  if (ra < LOADTEX_START || ra >= LOADTEX_END) return;
+  char **slot = (char **)((char *)tex + 0x40); char *buf = *slot;
+  if (!buf || !*(uint32_t *)((char *)tex + 0x3c)) return;   // nothing to free / GPU texture not created
+  void *alloc = *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c); if (!alloc) return;
+  unsigned size = *(uint32_t *)(buf - 0x10);
+  void (*Free)(void *, void *, unsigned) = (void (*)(void *, void *, unsigned))(*(uintptr_t **)alloc)[4];
+  *slot = NULL; Free(alloc, buf - 0x10, 0);
+  tex_copies_freed++; tex_copy_bytes_freed += size;
+  if (tex_copies_freed <= 10 || tex_copies_freed % 50 == 0) debugPrintf("texture CPU copy freed after upload: %uKB (total %u copies, %uKB)\n", size / 1024, tex_copies_freed, tex_copy_bytes_freed / 1024);
+}
 static void install_hooks(void) {
+  HOOK(0xd929e8, hook_TexFlush, orig_TexFlush);
   sceKernelCreateLwMutex(&memcat_lock, "memcat", 0, 0, NULL); memcat_lock_init = 1;
   cat_get_stats = (void (*)(void *, void *, int))(game_mod.text_base + 0x14f2e0);
   HOOK(0x14ef4c, hook_CatAlloc5, orig_CatAlloc5);
