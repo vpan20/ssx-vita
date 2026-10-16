@@ -299,8 +299,8 @@ static struct { void *p; size_t n; } big_tab[8]; static int big_n;
 static void *big_alloc(size_t n) {
   if (n < 6u * 1024 * 1024 || big_n >= 8) return NULL;
   void *p = NULL; int pool = 0;
-  if (n >= 24u * 1024 * 1024) {                    // >=24MB slabs (the 25MB GameWorld::SlotAlloc): phycont first, then budget.
-                                                   // (24MB, not 20: Audio::Data at 22M is allocated earlier and must not take phycont)
+  if (n >= 25u * 1024 * 1024) {                    // >=25MB slabs (only the 25M GameWorld::SlotAlloc, 26214400B): phycont first, then budget.
+                                                   // (25MB, not 24: GAMEPLAY_GEN 24M = 25165824B is allocated earlier and must not take phycont)
     p = vglAlloc(n, VGL_MEM_PHYCONT); pool = 2;
     if (!p) { p = vglAlloc(n, VGL_MEM_BUDGET); pool = 3; }
   } else if (n <= vglMemFree(VGL_MEM_BUDGET)) {   // 6-20MB: the ~9MB cdialog budget pool takes the first boot pool that fits (a 6-7MB one),
