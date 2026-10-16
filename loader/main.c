@@ -281,13 +281,13 @@ static void memcat_add(void *cat, int delta) {
   if (i == memcat_n) { if (memcat_n >= MEMCAT_MAX) return; memcat[memcat_n++].cat = cat; }
   unsigned c = memcat[i].cur; c = delta < 0 && (unsigned)(-delta) > c ? 0 : c + delta; memcat[i].cur = c; if (c > memcat[i].peak) memcat[i].peak = c;
 }
+static void (*cat_get_stats)(void *out, void *cat, int refresh);   // MemoryFramework::Category::GetStatistics(bool): sret 7 words summed over the category's allocators
 void memcat_report(void) {
-  char line[1400]; int o = snprintf(line, sizeof line, "memcat (cur/peak KB):");
-  for (int i = 0; i < memcat_n && o < (int)sizeof line - 60; i++) {
+  for (int i = 0; i < memcat_n; i++) {
     const char *nm = (const char *)memcat[i].cat + 0x1E0; if (!*nm) nm = "?";
-    o += snprintf(line + o, sizeof line - o, " %s=%u/%u", nm, memcat[i].cur / 1024, memcat[i].peak / 1024);
+    unsigned st[7] = { 0 }; if (cat_get_stats) cat_get_stats(st, memcat[i].cat, 1);
+    debugPrintf("memstat %-24s stats(KB) %u %u %u %u %u %u %u | allocated-ever %uKB\n", nm, st[0] / 1024, st[1] / 1024, st[2] / 1024, st[3] / 1024, st[4] / 1024, st[5] / 1024, st[6] / 1024, memcat[i].peak / 1024);
   }
-  debugPrintf("%s\n", line);
 }
 static void *(*orig_CatAlloc5)(void *, unsigned, const char *, unsigned, unsigned, unsigned);
 static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { void *p = orig_CatAlloc5(cat, size, name, a, b, c); if (p) memcat_add(cat, (int)size); return p; }
@@ -301,6 +301,7 @@ static void (*orig_CatFastFree)(void *, void *);
 static void hook_CatFastFree(void *cat, void *p) { if (p && cat_usable_size) memcat_add(cat, -(int)cat_usable_size(cat, p)); orig_CatFastFree(cat, p); }
 static void install_hooks(void) {
   cat_usable_size = (unsigned (*)(void *, void *))(game_mod.text_base + 0x14f240);
+  cat_get_stats = (void (*)(void *, void *, int))(game_mod.text_base + 0x14f2e0);
   HOOK(0x14ef4c, hook_CatAlloc5, orig_CatAlloc5);
   HOOK(0x14ee2c, hook_CatAlloc2, orig_CatAlloc2);
   HOOK(0x14ed54, hook_CatFastAlloc, orig_CatFastAlloc);
@@ -451,7 +452,7 @@ int main(int argc, char *argv[]) {
   sceMotionStartSampling();
   for (;;) {
     if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); struct mallinfo mi = mallinfo(); void *probe = malloc(1 << 20); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB) newlib heap: used %uKB free %uKB arena %uKB 1MB-probe %s\n", frame, fi.size_user / 1024, fi.size_cdram / 1024, (unsigned)mi.uordblks / 1024, (unsigned)mi.fordblks / 1024, (unsigned)mi.arena / 1024, probe ? "ok" : "FAILED"); free(probe);
-      memcat_report();
+      if (frame % 300 == 0) memcat_report();
       { extern unsigned jni_n_str, jni_n_arr, jni_b_arr, jni_n_del; debugPrintf("JNI objects so far: strings %u arrays %u (%uKB) DeleteLocalRef %u\n", jni_n_str, jni_n_arr, jni_b_arr / 1024, jni_n_del); } }
     frame++;
     SceCtrlData pad; sceCtrlPeekBufferPositive(0, &pad, 1);
