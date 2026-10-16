@@ -444,6 +444,15 @@ int main(int argc, char *argv[]) {
   debugPrintf("clocks: arm %d bus %d gpu %d xbar %d\n", scePowerGetArmClockFrequency(), scePowerGetBusClockFrequency(), scePowerGetGpuClockFrequency(), scePowerGetGpuXbarClockFrequency());
   debugPrintf("vitaGL init...\n");
   vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, 22 * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);   // leave 22MB outside VitaGL: thread stacks (3x2MB + 8x512KB) and misc; 32MB left ~17MB unused (free user)
+  { // Frame pacing: the game paces itself to ~33ms (30fps). With VitaGL's default vsync interval 1 (60Hz) a frame that lands a
+    // fraction of a ms past a vblank is held one extra vblank (50ms) and the next is shown early (16ms) -> visible judder.
+    // Interval 2 locks presentation to a steady 30Hz grid. SSX_VSYNC_INTERVAL=1 restores the old behaviour, 0 disables vsync.
+#ifndef SSX_VSYNC_INTERVAL
+#define SSX_VSYNC_INTERVAL 2
+#endif
+    eglSwapInterval(NULL, SSX_VSYNC_INTERVAL);
+    debugPrintf("vsync interval %d\n", SSX_VSYNC_INTERVAL);
+  }
   debugPrintf("vitaGL ok: pools vram %uKB ram %uKB phycont %uKB budget %uKB\n", (unsigned)vglMemFree(VGL_MEM_VRAM)/1024, (unsigned)vglMemFree(VGL_MEM_RAM)/1024, (unsigned)vglMemFree(VGL_MEM_PHYCONT)/1024, (unsigned)vglMemFree(VGL_MEM_BUDGET)/1024);
   glViewport(0, 0, SCREEN_W, SCREEN_H);   // vitaGL's default viewport is 0x0 and the game never sets one; must come AFTER vglInit
 
