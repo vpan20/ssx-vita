@@ -318,7 +318,8 @@ static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat
 // LoadTextureCommon, Bind when the GPU texture is missing). Lockable textures (Scaleform's glyph atlas) write through
 // AcquireSurface(): if that finds the copy gone it re-creates a zeroed one and marks the texture sticky so it is never
 // freed again (the first lock finds zeros, which is what the buffer held). Destroy() tolerates a NULL copy.
-#define RNA_ALLOC_GLOBAL 0x17d0970           // *(+0x6C) = RNA's ICoreAllocator; vtable: +8 Alloc(size,name,flags) +0x10 Free(ptr,size)
+#define RNA_ALLOC_GLOBAL 0x17d0970           // RNA allocator globals: *(+0x6C) if set, else *(+0x14) (CreateInternal's own fallback order); vtable: +8 Alloc(size,name,flags) +0x10 Free(ptr,size)
+static void *rna_allocator(void) { char *g = (char *)game_mod.text_base + RNA_ALLOC_GLOBAL; void *a = *(void **)(g + 0x6c); if (!a) a = *(void **)(g + 0x14); return a; }
 #define TEXSET_N 2048
 static void *tex_sticky[TEXSET_N]; static int tex_sticky_n;
 static int tex_is_sticky(void *t) { for (int i = 0; i < tex_sticky_n; i++) if (tex_sticky[i] == t) return 1; return 0; }
@@ -330,9 +331,9 @@ static void (*orig_TexFlush)(void *);
 static void hook_TexFlush(void *tex) {
   orig_TexFlush(tex);
   char **slot = (char **)((char *)tex + 0x40); char *buf = *slot;
-  { static int n; if (n++ < 12) debugPrintf("TexFlush #%d tex %p: copy %p glid %u type %u size %u sticky %d alloc %p\n", n, tex, buf, *(uint32_t *)((char *)tex + 0x3c), *(uint32_t *)((char *)tex + 0x10), buf ? *(uint32_t *)(buf - 0x10) : 0, tex_is_sticky(tex), *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c)); }
+  { static int n; if (n++ < 12) debugPrintf("TexFlush #%d tex %p: copy %p glid %u type %u size %u sticky %d alloc %p\n", n, tex, buf, *(uint32_t *)((char *)tex + 0x3c), *(uint32_t *)((char *)tex + 0x10), buf ? *(uint32_t *)(buf - 0x10) : 0, tex_is_sticky(tex), rna_allocator()); }
   if (!buf || !*(uint32_t *)((char *)tex + 0x3c) || tex_is_sticky(tex)) return;
-  void *alloc = *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c); if (!alloc) return;
+  void *alloc = rna_allocator(); if (!alloc) return;
   unsigned size = *(uint32_t *)(buf - 0x10);
   void (*Free)(void *, void *, unsigned) = (void (*)(void *, void *, unsigned))(*(uintptr_t **)alloc)[4];
   *slot = NULL; Free(alloc, buf - 0x10, 0);
@@ -344,7 +345,7 @@ static void *hook_TexAcquire(void *tex, void *dev, int a, int b, int c, int d) {
   char **slot = (char **)((char *)tex + 0x40);
   tex_set_sticky(tex);
   if (!*slot && tex_data_size) {
-    void *alloc = *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c);
+    void *alloc = rna_allocator();
     unsigned size = tex_data_size(tex);
     void *(*Alloc)(void *, unsigned, const char *, unsigned) = (void *(*)(void *, unsigned, const char *, unsigned))(*(uintptr_t **)alloc)[2];
     char *raw = alloc ? Alloc(alloc, size + 0x10, NULL, 1) : NULL;
