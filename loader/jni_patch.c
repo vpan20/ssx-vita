@@ -157,6 +157,10 @@ static AssetStream *asset_open(const char *name) {
   }
   AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
   s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
+  if (nl0 > 4 && !strcmp(name + nl0 - 4, ".abk") && s->size > 16 * 1024 * 1024) {   // sample banks are loaded whole into Audio::Data (Android: 100MB pool; ours: 14MB)
+    debugPrintf("asset open %s (%ld bytes): sample bank too large for the Vita audio pool, skipped (FileNotFoundException)\n", name, s->size);
+    sceIoClose(fd); free(s); pending_exception = 1; return NULL;
+  }
   debugPrintf("asset open %s (%ld bytes)\n", name, s->size);
   size_t nl = strlen(name);
   if (nl >= 10 && !strcmp(name + nl - 10, "memory.cfg")) {

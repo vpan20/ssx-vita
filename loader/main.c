@@ -272,7 +272,40 @@ static void *hook_FETutorialCheck(void *self, void *key, int b) {
   static int n; if (n++ < 20) debugPrintf("FETutorialCheck(key %08X) suppressed\n", key ? *(uint32_t *)key : 0);
   return NULL;
 }
+// ---- MemoryFramework category accounting: current/peak bytes per category (name lives at category+0x1E0) ----
+#define MEMCAT_MAX 64
+static struct { void *cat; unsigned cur, peak; } memcat[MEMCAT_MAX]; static int memcat_n;
+static unsigned (*cat_usable_size)(void *, void *);
+static void memcat_add(void *cat, int delta) {
+  int i; for (i = 0; i < memcat_n; i++) if (memcat[i].cat == cat) break;
+  if (i == memcat_n) { if (memcat_n >= MEMCAT_MAX) return; memcat[memcat_n++].cat = cat; }
+  unsigned c = memcat[i].cur; c = delta < 0 && (unsigned)(-delta) > c ? 0 : c + delta; memcat[i].cur = c; if (c > memcat[i].peak) memcat[i].peak = c;
+}
+void memcat_report(void) {
+  char line[1400]; int o = snprintf(line, sizeof line, "memcat (cur/peak KB):");
+  for (int i = 0; i < memcat_n && o < (int)sizeof line - 60; i++) {
+    const char *nm = (const char *)memcat[i].cat + 0x1E0; if (!*nm) nm = "?";
+    o += snprintf(line + o, sizeof line - o, " %s=%u/%u", nm, memcat[i].cur / 1024, memcat[i].peak / 1024);
+  }
+  debugPrintf("%s\n", line);
+}
+static void *(*orig_CatAlloc5)(void *, unsigned, const char *, unsigned, unsigned, unsigned);
+static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { void *p = orig_CatAlloc5(cat, size, name, a, b, c); if (p) memcat_add(cat, (int)size); return p; }
+static void *(*orig_CatAlloc2)(void *, unsigned, const char *);
+static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { void *p = orig_CatAlloc2(cat, size, name); if (p) memcat_add(cat, (int)size); return p; }
+static void *(*orig_CatFastAlloc)(void *, unsigned);
+static void *hook_CatFastAlloc(void *cat, unsigned size) { void *p = orig_CatFastAlloc(cat, size); if (p) memcat_add(cat, (int)size); return p; }
+static void (*orig_CatFree)(void *, void *);
+static void hook_CatFree(void *cat, void *p) { if (p && cat_usable_size) memcat_add(cat, -(int)cat_usable_size(cat, p)); orig_CatFree(cat, p); }
+static void (*orig_CatFastFree)(void *, void *);
+static void hook_CatFastFree(void *cat, void *p) { if (p && cat_usable_size) memcat_add(cat, -(int)cat_usable_size(cat, p)); orig_CatFastFree(cat, p); }
 static void install_hooks(void) {
+  cat_usable_size = (unsigned (*)(void *, void *))(game_mod.text_base + 0x14f240);
+  HOOK(0x14ef4c, hook_CatAlloc5, orig_CatAlloc5);
+  HOOK(0x14ee2c, hook_CatAlloc2, orig_CatAlloc2);
+  HOOK(0x14ed54, hook_CatFastAlloc, orig_CatFastAlloc);
+  HOOK(0x14f214, hook_CatFree, orig_CatFree);
+  HOOK(0x14edcc, hook_CatFastFree, orig_CatFastFree);
   HOOK(0x1b7968, hook_FETutorialCheck, orig_FETutorialCheck);
   HOOK(0xa3b18c, hook_SfUnmap, orig_SfUnmap);
   HOOK(0x14b888, hook_OutOfMemory, orig_OutOfMemory);
@@ -418,6 +451,7 @@ int main(int argc, char *argv[]) {
   sceMotionStartSampling();
   for (;;) {
     if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); struct mallinfo mi = mallinfo(); void *probe = malloc(1 << 20); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB) newlib heap: used %uKB free %uKB arena %uKB 1MB-probe %s\n", frame, fi.size_user / 1024, fi.size_cdram / 1024, (unsigned)mi.uordblks / 1024, (unsigned)mi.fordblks / 1024, (unsigned)mi.arena / 1024, probe ? "ok" : "FAILED"); free(probe);
+      memcat_report();
       { extern unsigned jni_n_str, jni_n_arr, jni_b_arr, jni_n_del; debugPrintf("JNI objects so far: strings %u arrays %u (%uKB) DeleteLocalRef %u\n", jni_n_str, jni_n_arr, jni_b_arr / 1024, jni_n_del); } }
     frame++;
     SceCtrlData pad; sceCtrlPeekBufferPositive(0, &pad, 1);
