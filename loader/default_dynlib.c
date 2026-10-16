@@ -33,9 +33,11 @@ int clock_gettime_rt(int clk, struct timespec *t) { return clock_gettime(CLOCK_R
 // usleep/nanosleep with a floor: the game uses tiny sleeps as yields; on Vita a 0us delay never yields
 // Frame-pacing diagnosis: time spent sleeping / in timed waits on the main (DrawFrame) thread, read per frame by main.c.
 // Hypothesis under test: the game self-limits to ~33ms inside NativeOnDrawFrame with a sleep, fighting our vsync.
-// SSX_SKIP_MAIN_SLEEP=1 turns main-thread sleeps >= 2ms into a short yield (the fix if the hypothesis holds); default off.
+// SSX_SKIP_MAIN_SLEEP=1 turns main-thread sleeps >= 2ms into a short yield. Confirmed by the f6ef2f1 trace: the main thread's
+// DrawFrame time is ~100% one usleep per frame (draw 31.1ms = sleep 31.1ms), i.e. the game's own 30fps limiter, which landed
+// frames at 33.3-33.8ms against vsync's 33.37ms grid (judder). With the sleep skipped, vsync interval 2 alone paces the loop.
 #ifndef SSX_SKIP_MAIN_SLEEP
-#define SSX_SKIP_MAIN_SLEEP 0
+#define SSX_SKIP_MAIN_SLEEP 1
 #endif
 int stats_main_tid = -1;
 volatile unsigned long long main_sleep_us, main_wait_us; volatile unsigned main_sleep_calls, main_wait_calls;
