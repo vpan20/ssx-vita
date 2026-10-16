@@ -98,13 +98,37 @@ static char *rename_tex_sampler(const char *src, int len) {
   }
   out[o] = 0; return out;
 }
+// Cg treats a non-static global as an implicit uniform parameter. EA's GLSL is machine-generated from Cg/HLSL and keeps
+// every temporary at file scope ("vec3 TMP6;", "VertexOutput_Forward ret_0;", struct globals with mat4 members), so
+// ShaccCg reported thousands of bogus uniforms; a struct-typed one ("OUT0122.WorldNormal_Blends", float4x4) reached
+// OGLESRnaFxShader::ResolveScopeParm with no matching fx constant and crashed (player_ghost.fxo, race start).
+// Prefix "static " to every file-scope declaration that is not uniform/attribute/varying/const/struct/precision.
+static char *static_globals(const char *src, int len) {
+  int lines = 1; for (int i = 0; i < len; i++) if (src[i] == '\n') lines++;
+  char *out = malloc(len + lines * 7 + 1); int o = 0, depth = 0, i = 0;
+  while (i < len) {
+    int e = i; while (e < len && src[e] != '\n') e++;             // [i,e) = line
+    int b = i; while (b < e && (src[b] == ' ' || src[b] == '\t')) b++;
+    int ll = e - b; const char *t = src + b; int tl = ll; while (tl > 0 && (t[tl-1] == '\r' || t[tl-1] == ' ' || t[tl-1] == '\t')) tl--;   // CRLF source
+    if (depth == 0 && tl > 2 && t[tl-1] == ';' && !memchr(t, '(', ll) && !memchr(t, '=', ll) && !memchr(t, '{', ll) && !memchr(t, '}', ll)
+        && t[0] != '#' && t[0] != '/' && strncmp(t, "uniform", 7) && strncmp(t, "attribute", 9) && strncmp(t, "varying", 7)
+        && strncmp(t, "struct", 6) && strncmp(t, "precision", 9) && strncmp(t, "const", 5) && strncmp(t, "invariant", 9) && strncmp(t, "static", 6)) {
+      memcpy(out + o, src + i, b - i); o += b - i; memcpy(out + o, "static ", 7); o += 7; memcpy(out + o, t, ll); o += ll;
+    } else { memcpy(out + o, src + i, e - i); o += e - i; }
+    for (int k = i; k < e; k++) { if (src[k] == '{') depth++; else if (src[k] == '}') depth--; }
+    if (e < len) out[o++] = '\n';
+    i = e + 1;
+  }
+  out[o] = 0; return out;
+}
 void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *len) {
   if (n > 0 && src && src[0]) {
     int l = len && len[0] > 0 ? len[0] : (int)strlen(src[0]);
     int h = l > 380 ? 380 : l; memcpy(last_src_head, src[0], h); last_src_head[h] = 0;
     if (n == 1) {
       char *fixed = glsl_prepass(src[0], l);
-      char *final = rename_tex_sampler(fixed, strlen(fixed)); free(fixed);
+      char *renamed = rename_tex_sampler(fixed, strlen(fixed)); free(fixed);
+      char *final = static_globals(renamed, strlen(renamed)); free(renamed);
       remember_src(sh, final);
       { size_t fl = strlen(final); if (fl >= sizeof last_src_full) fl = sizeof last_src_full - 1; memcpy(last_src_full, final, fl); last_src_full[fl] = 0; }
       const GLchar *one[1] = { final }; glShaderSource(sh, 1, one, NULL); free(final); return;
