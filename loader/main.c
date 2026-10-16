@@ -302,9 +302,16 @@ void memcat_report(void) {
   }
 }
 static void *(*orig_CatAlloc5)(void *, unsigned, const char *, unsigned, unsigned, unsigned);
-static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); return orig_CatAlloc5(cat, size, name, a, b, c); }
+// Big-allocation tracer for the categories that run dry: who asks Render/Audio::Data/GameWorld for >=128KB, and for what.
+static void memcat_trace(void *cat, unsigned size, const char *name, void *ra) {
+  static int n; if (size < 128 * 1024 || n >= 600) return;
+  const char *cn = (const char *)cat + 0x1E0;
+  if (strcmp(cn, "Render") && strcmp(cn, "Audio::Data") && strncmp(cn, "GameWorld", 9) && strncmp(cn, "GP::", 4)) return;
+  n++; debugPrintf("memalloc %s %uKB '%s' from game+0x%X\n", cn, size / 1024, name ? name : "", (unsigned)((uintptr_t)ra - game_mod.text_base));
+}
+static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc5(cat, size, name, a, b, c); }
 static void *(*orig_CatAlloc2)(void *, unsigned, const char *);
-static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); return orig_CatAlloc2(cat, size, name); }
+static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc2(cat, size, name); }
 static void install_hooks(void) {
   sceKernelCreateLwMutex(&memcat_lock, "memcat", 0, 0, NULL); memcat_lock_init = 1;
   cat_get_stats = (void (*)(void *, void *, int))(game_mod.text_base + 0x14f2e0);
