@@ -250,9 +250,10 @@ static void hook_UnpackUpdate(void) {
 
 // MemoryFramework::ErrorHandlers::OutOfMemory(const MemoryFailure&): log what ran out before the engine stops
 static void (*orig_OutOfMemory)(void *);
+unsigned render_live_kb(void); unsigned render_peak_kb(void); static unsigned tex_copy_bytes_freed;
 static void hook_OutOfMemory(void *mf) {
   uint32_t *w = mf;
-  debugPrintf("OUT OF MEMORY: words %08X %08X %08X %08X %08X %08X %08X %08X\n", w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]);
+  debugPrintf("OUT OF MEMORY: words %08X %08X %08X %08X %08X %08X %08X %08X (Render live %uKB peak %uKB, texture copies freed %uKB)\n", w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], render_live_kb(), render_peak_kb(), tex_copy_bytes_freed / 1024);
   for (int i = 0; i < 8; i++) if (w[i] > 0x94000000 && w[i] < 0x95900000) debugPrintf("  str[%d]=%.60s\n", i, (const char *)w[i]);
   orig_OutOfMemory(mf);
 }
@@ -303,15 +304,25 @@ void memcat_report(void) {
 }
 static void *(*orig_CatAlloc5)(void *, unsigned, const char *, unsigned, unsigned, unsigned);
 // Big-allocation tracer for the categories that run dry: who asks Render/Audio::Data/GameWorld for >=128KB, and for what.
+static unsigned render_live, render_peak; static void *render_cat;
+static unsigned (*cat_usable)(void *, void *);
+static void render_acct(void *cat, int delta) {
+  if (cat != render_cat) { if (render_cat || strcmp((const char *)cat + 0x1E0, "Render")) return; render_cat = cat; }
+  unsigned c = render_live; c = delta < 0 && (unsigned)(-delta) > c ? 0 : c + delta; render_live = c; if (c > render_peak) render_peak = c;
+}
+unsigned render_live_kb(void) { return render_live / 1024; }
+unsigned render_peak_kb(void) { return render_peak / 1024; }
 static void memcat_trace(void *cat, unsigned size, const char *name, void *ra) {
   static int n; if (size < 128 * 1024 || n >= 600) return;
   const char *cn = (const char *)cat + 0x1E0;
   if (strcmp(cn, "Render") && strcmp(cn, "Audio::Data") && strncmp(cn, "GameWorld", 9) && strncmp(cn, "GP::", 4)) return;
   n++; debugPrintf("memalloc %s %uKB '%s' from game+0x%X\n", cn, size / 1024, name ? name : "", (unsigned)((uintptr_t)ra - game_mod.text_base));
 }
-static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc5(cat, size, name, a, b, c); }
+static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); void *p = orig_CatAlloc5(cat, size, name, a, b, c); if (p) render_acct(cat, (int)size); return p; }
 static void *(*orig_CatAlloc2)(void *, unsigned, const char *);
-static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); return orig_CatAlloc2(cat, size, name); }
+static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); void *p = orig_CatAlloc2(cat, size, name); if (p) render_acct(cat, (int)size); return p; }
+static void (*orig_CatFree)(void *, void *);
+static void hook_CatFree(void *cat, void *p) { if (p && cat == render_cat && cat_usable) render_acct(cat, -(int)cat_usable(cat, p)); orig_CatFree(cat, p); }
 // RNA::TexturePlatC keeps a CPU copy of every texture's pixels (this+0x40, from the Render pool; 30MB+ for one track
 // load) so Android can re-upload after an EGL context loss. The Vita never loses its context, so after Flush() has
 // uploaded a texture the copy is dead weight: free it. Every upload goes through Flush() (CreateInternal with data,
@@ -326,7 +337,7 @@ static int tex_is_sticky(void *t) { for (int i = 0; i < tex_sticky_n; i++) if (t
 static void tex_set_sticky(void *t) { if (!tex_is_sticky(t) && tex_sticky_n < TEXSET_N) tex_sticky[tex_sticky_n++] = t; }
 static void tex_unsticky(void *t) { for (int i = 0; i < tex_sticky_n; i++) if (tex_sticky[i] == t) { tex_sticky[i] = tex_sticky[--tex_sticky_n]; return; } }
 static unsigned (*tex_data_size)(void *);
-static unsigned tex_copies_freed, tex_copy_bytes_freed, tex_copies_recreated;
+static unsigned tex_copies_freed, tex_copies_recreated;
 static void (*orig_TexFlush)(void *);
 static void hook_TexFlush(void *tex) {
   orig_TexFlush(tex);
@@ -365,6 +376,8 @@ static void install_hooks(void) {
   cat_get_stats = (void (*)(void *, void *, int))(game_mod.text_base + 0x14f2e0);
   HOOK(0x14ef4c, hook_CatAlloc5, orig_CatAlloc5);
   HOOK(0x14ee2c, hook_CatAlloc2, orig_CatAlloc2);
+  cat_usable = (unsigned (*)(void *, void *))(game_mod.text_base + 0x14f240);
+  HOOK(0x14f214, hook_CatFree, orig_CatFree);
   HOOK(0x1b7968, hook_FETutorialCheck, orig_FETutorialCheck);
   HOOK(0xa3b18c, hook_SfUnmap, orig_SfUnmap);
   HOOK(0x14b888, hook_OutOfMemory, orig_OutOfMemory);
@@ -512,6 +525,7 @@ int main(int argc, char *argv[]) {
   for (;;) {
     if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); struct mallinfo mi = mallinfo(); void *probe = malloc(1 << 20); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB) newlib heap: used %uKB free %uKB arena %uKB 1MB-probe %s\n", frame, fi.size_user / 1024, fi.size_cdram / 1024, (unsigned)mi.uordblks / 1024, (unsigned)mi.fordblks / 1024, (unsigned)mi.arena / 1024, probe ? "ok" : "FAILED"); free(probe);
       if (frame % 300 == 0) memcat_report();
+      debugPrintf("Render pool live %uKB peak %uKB\n", render_live_kb(), render_peak_kb());
       { extern unsigned jni_n_str, jni_n_arr, jni_b_arr, jni_n_del; debugPrintf("JNI objects so far: strings %u arrays %u (%uKB) DeleteLocalRef %u\n", jni_n_str, jni_n_arr, jni_b_arr / 1024, jni_n_del); } }
     frame++;
     SceCtrlData pad; sceCtrlPeekBufferPositive(0, &pad, 1);
