@@ -103,11 +103,11 @@ static void asset_path(char *out, size_t n, const char *name) {
 // name (whitespace-delimited) and replace the whole size=... token, so conditionals like {{pc}?20M:100M} are
 // dropped. Applied to the in-memory copy only; the file on the card is untouched.
 static const struct { const char *name; const char *size; } memcfg_rules[] = {
-  { "AUDIODATA_GEN", "22M" },   { "GAMEPLAY_GEN", "16M" },    { "GAMEWORLD_GEN", "12M" },   // Android: AUDIODATA 100M (sample banks load whole; collisions.abk OOM at 14M), GAMEPLAY/GAMEWORLD 20M/20M (anim_all.cba 6.2MB -> GP::AnimData)
-  { "GLOBAL_GEN", "32M" },      { "RENDER_GEN", "60M" },      { "STL_GEN", "8M" },           { "FE_GEN", "9M" },
-  { "FE_SFGFX_GEN_A", "35M" },  { "FE_SFGFX_GEN_B", "3M" },    { "FE_SFGFX_AS_SBA", "2M" },
+  { "AUDIODATA_GEN", "54M" },   { "GAMEPLAY_GEN", "16M" },    { "GAMEWORLD_GEN", "12M" },   // Android: AUDIODATA 100M (sample banks load whole; collisions.abk OOM at 14M), GAMEPLAY/GAMEWORLD 20M/20M (anim_all.cba 6.2MB -> GP::AnimData)
+  { "GLOBAL_GEN", "32M" },      { "RENDER_GEN", "36M" },      { "STL_GEN", "8M" },           { "FE_GEN", "7M" },
+  { "FE_SFGFX_GEN_A", "30M" },  { "FE_SFGFX_GEN_B", "3M" },    { "FE_SFGFX_AS_SBA", "2M" },
   { "FE_SFGFX_ASCRIPT", "9M" }, { "FE_SFGFX_REN_SBA", "4M" },  { "FE_SFGFX_RENDER", "8M" },
-  { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "9M" },  { "GAMEWORLD_SLOTALLOC", "25M" },
+  { "FE_UX_GEN", "3M" },        { "GLOBAL_ASSETTMP", "8M" },  { "GAMEWORLD_SLOTALLOC", "25M" },
   { "ASSETSTREAM_READBUF", "5M" }, { "AUDIO_RWAC", "3M" },
 };
 static int is_ws(char c) { return c == ' ' || c == '\t'; }
@@ -157,7 +157,7 @@ static AssetStream *asset_open(const char *name) {
   }
   AssetStream *s = calloc(1, sizeof *s); s->tag = TAG_STREAM; s->fd = fd;
   s->size = sceIoLseek(fd, 0, SCE_SEEK_END); sceIoLseek(fd, 0, SCE_SEEK_SET);
-  if (nl0 > 4 && !strcmp(name + nl0 - 4, ".abk") && s->size > 16 * 1024 * 1024) {   // sample banks are loaded whole into Audio::Data (Android: 100MB pool; ours: 14MB)
+  if (nl0 > 4 && !strcmp(name + nl0 - 4, ".abk") && s->size > 64 * 1024 * 1024) {   // sample banks are loaded whole into Audio::Data (Android: 100MB pool; ours: 14MB)
     debugPrintf("asset open %s (%ld bytes): sample bank too large for the Vita audio pool, skipped (FileNotFoundException)\n", name, s->size);
     sceIoClose(fd); free(s); pending_exception = 1; return NULL;
   }
