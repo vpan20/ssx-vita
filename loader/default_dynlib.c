@@ -31,8 +31,24 @@
 // against (soloader convention). Otherwise CLOCK_MONOTONIC-based deadlines are misread and every timed wait expires at once.
 int clock_gettime_rt(int clk, struct timespec *t) { return clock_gettime(CLOCK_REALTIME, t); }   // exactly what pthread-embedded's timeout conversion (ftime) uses
 // usleep/nanosleep with a floor: the game uses tiny sleeps as yields; on Vita a 0us delay never yields
-int usleep_yield(useconds_t us) { sceKernelDelayThread(us < 100 ? 100 : us); return 0; }
-int nanosleep_yield(const struct timespec *req, struct timespec *rem) { long long us = req ? (long long)req->tv_sec * 1000000 + req->tv_nsec / 1000 : 0; sceKernelDelayThread(us < 100 ? 100 : (SceUInt)us); return 0; }
+// Frame-pacing diagnosis: time spent sleeping / in timed waits on the main (DrawFrame) thread, read per frame by main.c.
+// Hypothesis under test: the game self-limits to ~33ms inside NativeOnDrawFrame with a sleep, fighting our vsync.
+// SSX_SKIP_MAIN_SLEEP=1 turns main-thread sleeps >= 2ms into a short yield (the fix if the hypothesis holds); default off.
+#ifndef SSX_SKIP_MAIN_SLEEP
+#define SSX_SKIP_MAIN_SLEEP 0
+#endif
+int stats_main_tid = -1;
+volatile unsigned long long main_sleep_us, main_wait_us; volatile unsigned main_sleep_calls, main_wait_calls;
+static inline int on_main(void) { return stats_main_tid >= 0 && sceKernelGetThreadId() == stats_main_tid; }
+static void delay_us(long long us) {
+  if (us < 100) us = 100;
+  if (!on_main()) { sceKernelDelayThread((SceUInt)us); return; }
+  if (SSX_SKIP_MAIN_SLEEP && us >= 2000) us = 100;
+  SceUInt64 t = sceKernelGetProcessTimeWide(); sceKernelDelayThread((SceUInt)us);
+  main_sleep_us += sceKernelGetProcessTimeWide() - t; main_sleep_calls++;
+}
+int usleep_yield(useconds_t us) { delay_us(us); return 0; }
+int nanosleep_yield(const struct timespec *req, struct timespec *rem) { long long us = req ? (long long)req->tv_sec * 1000000 + req->tv_nsec / 1000 : 0; delay_us(us); return 0; }
 // Shader compile/link diagnostics: VitaGL translates GLSL through vitashark; failures are otherwise silent
 static char last_src_head[400];
 static char last_src_full[32768]; static int shader_fail_dumps;
@@ -141,6 +157,12 @@ extern void pthread_cond_destroy_bridge();
 extern void pthread_cond_init_bridge();
 extern void pthread_cond_signal_bridge();
 extern void pthread_cond_timedwait_bridge();
+int cond_timedwait_timed(void **c, void **m, const struct timespec *ts) {   // main-thread timed waits counted like sleeps
+  int (*f)(void **, void **, const struct timespec *) = (int (*)(void **, void **, const struct timespec *))pthread_cond_timedwait_bridge;
+  if (!on_main()) return f(c, m, ts);
+  SceUInt64 t = sceKernelGetProcessTimeWide(); int r = f(c, m, ts);
+  main_wait_us += sceKernelGetProcessTimeWide() - t; main_wait_calls++; return r;
+}
 extern void pthread_cond_wait_bridge();
 extern void pthread_create_bridge();
 extern void pthread_detach_bridge();
@@ -756,7 +778,7 @@ so_default_dynlib default_dynlib[] = {
   { "pthread_cond_destroy", (uintptr_t)&pthread_cond_destroy_bridge },
   { "pthread_cond_init", (uintptr_t)&pthread_cond_init_bridge },
   { "pthread_cond_signal", (uintptr_t)&pthread_cond_signal_bridge },
-  { "pthread_cond_timedwait", (uintptr_t)&pthread_cond_timedwait_bridge },
+  { "pthread_cond_timedwait", (uintptr_t)&cond_timedwait_timed },
   { "pthread_cond_wait", (uintptr_t)&pthread_cond_wait_bridge },
   { "pthread_create", (uintptr_t)&pthread_create_bridge },
   { "pthread_detach", (uintptr_t)&pthread_detach_bridge },

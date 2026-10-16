@@ -586,6 +586,9 @@ int main(int argc, char *argv[]) {
       video_done_at = 0; jni_video_play_pending = 0;
       if (VideoDone) { for (int id = 0; id < 4; id++) VideoDone(fake_env, NULL, id, 0,0,0,0,0); debugPrintf("video: reported completion\n"); }
     }
+    extern int stats_main_tid; extern volatile unsigned long long main_sleep_us, main_wait_us; extern volatile unsigned main_sleep_calls, main_wait_calls;
+    if (stats_main_tid < 0) stats_main_tid = sceKernelGetThreadId();
+    unsigned long long sl0 = main_sleep_us, wt0 = main_wait_us; unsigned slc0 = main_sleep_calls, wtc0 = main_wait_calls;
     SceUInt64 t0 = sceKernelGetProcessTimeWide();
     DrawFrame(fake_env, NULL, 0,0,0,0,0,0);
     SceUInt64 t1 = sceKernelGetProcessTimeWide();
@@ -595,10 +598,15 @@ int main(int argc, char *argv[]) {
     { // frame timing: per 100 frames, avg/max of game update+render (DrawFrame) and of the swap, plus frames over 33ms
       static SceUInt64 last, sum_d, sum_s, max_d, max_s, max_f; static unsigned slow, n;
       SceUInt64 t2 = sceKernelGetProcessTimeWide(), d = t1 - t0, sw = t2 - t1, fr = last ? t2 - last : 0; last = t2;
-      sum_d += d; sum_s += sw; if (d > max_d) max_d = d; if (sw > max_s) max_s = sw; if (fr > max_f) max_f = fr; if (fr > 33333) slow++; n++;
-      if (frame % 100 == 0) { debugPrintf("timing: frame %u avg %.1fms (draw %.1f max %.1f, swap %.1f max %.1f) worst frame %.1fms, %u/%u frames >33ms\n", frame,
-          (sum_d + sum_s) / 1000.0 / n, sum_d / 1000.0 / n, max_d / 1000.0, sum_s / 1000.0 / n, max_s / 1000.0, max_f / 1000.0, slow, n);
-        sum_d = sum_s = max_d = max_s = max_f = 0; slow = n = 0; }
+      unsigned long long sl = main_sleep_us - sl0, wt = main_wait_us - wt0; unsigned slc = main_sleep_calls - slc0, wtc = main_wait_calls - wtc0;
+      static unsigned long long sum_sl, sum_wt;
+      sum_sl += sl; sum_wt += wt;
+      // 300-frame trace (frames 1200-1499, normally the menu/globe): full frame, game work, sleeps/waits inside it, swap
+      if (frame >= 1200 && frame < 1500) debugPrintf("ft %u frame %.1f draw %.1f (sleep %.1f/%u wait %.1f/%u) swap %.1f\n", frame, fr / 1000.0, d / 1000.0, sl / 1000.0, slc, wt / 1000.0, wtc, sw / 1000.0);
+      sum_d += d; sum_s += sw; if (d > max_d) max_d = d; if (sw > max_s) max_s = sw; if (fr > max_f) max_f = fr; if (fr > 34000) slow++; n++;
+      if (frame % 100 == 0) { debugPrintf("timing: frame %u avg %.1fms (draw %.1f max %.1f [main sleep %.1f wait %.1f], swap %.1f max %.1f) worst frame %.1fms, %u/%u frames >34ms\n", frame,
+          (sum_d + sum_s) / 1000.0 / n, sum_d / 1000.0 / n, max_d / 1000.0, sum_sl / 1000.0 / n, sum_wt / 1000.0 / n, sum_s / 1000.0 / n, max_s / 1000.0, max_f / 1000.0, slow, n);
+        sum_d = sum_s = max_d = max_s = max_f = 0; sum_sl = sum_wt = 0; slow = n = 0; }
     }
     { extern void gl_frame_summary(unsigned); gl_frame_summary(frame - 1); }
     if (frame <= 5) debugPrintf("  frame %u swapped\n", frame - 1);
