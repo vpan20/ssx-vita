@@ -330,6 +330,7 @@ static void (*orig_TexFlush)(void *);
 static void hook_TexFlush(void *tex) {
   orig_TexFlush(tex);
   char **slot = (char **)((char *)tex + 0x40); char *buf = *slot;
+  { static int n; if (n++ < 12) debugPrintf("TexFlush #%d tex %p: copy %p glid %u type %u size %u sticky %d alloc %p\n", n, tex, buf, *(uint32_t *)((char *)tex + 0x3c), *(uint32_t *)((char *)tex + 0x10), buf ? *(uint32_t *)(buf - 0x10) : 0, tex_is_sticky(tex), *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c)); }
   if (!buf || !*(uint32_t *)((char *)tex + 0x3c) || tex_is_sticky(tex)) return;
   void *alloc = *(void **)(game_mod.text_base + RNA_ALLOC_GLOBAL + 0x6c); if (!alloc) return;
   unsigned size = *(uint32_t *)(buf - 0x10);
