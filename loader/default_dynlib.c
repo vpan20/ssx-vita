@@ -297,13 +297,13 @@ int rename_fix(const char *a, const char *c) { char b1[512], b2[512]; return ren
 // Only the 26MB GameWorld::SlotAlloc slab fits phycont; everything else falls through to newlib unchanged.
 static struct { void *p; size_t n; } big_tab[8]; static int big_n;
 static void *big_alloc(size_t n) {
-  if (n < 8u * 1024 * 1024 || big_n >= 8) return NULL;
+  if (n < 6u * 1024 * 1024 || big_n >= 8) return NULL;
   void *p = NULL; int pool = 0;
   if (n >= 24u * 1024 * 1024) {                    // >=24MB slabs (the 25MB GameWorld::SlotAlloc): phycont first, then budget.
                                                    // (24MB, not 20: Audio::Data at 22M is allocated earlier and must not take phycont)
     p = vglAlloc(n, VGL_MEM_PHYCONT); pool = 2;
     if (!p) { p = vglAlloc(n, VGL_MEM_BUDGET); pool = 3; }
-  } else if (n <= vglMemFree(VGL_MEM_BUDGET)) {   // 8-20MB: the ~9MB cdialog budget pool takes the first one that fits (an 8MB boot pool),
+  } else if (n <= vglMemFree(VGL_MEM_BUDGET)) {   // 6-20MB: the ~9MB cdialog budget pool takes the first boot pool that fits (a 6-7MB one),
     p = vglAlloc(n, VGL_MEM_BUDGET); pool = 3;     // freeing that much newlib heap for the Audio::Data pool
   }
   if (!p) return NULL;

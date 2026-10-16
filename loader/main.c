@@ -347,7 +347,7 @@ static void hook_TexFlush(void *tex) {
   void *alloc = rna_allocator(); if (!alloc) return;
   unsigned size = *(uint32_t *)(buf - 0x10);
   void (*Free)(void *, void *, unsigned) = (void (*)(void *, void *, unsigned))(*(uintptr_t **)alloc)[4];
-  *slot = NULL; Free(alloc, buf - 0x10, 0);
+  *slot = NULL; Free(alloc, buf - 0x10, 0); if (render_cat) render_acct(render_cat, -(int)size);
   tex_copies_freed++; tex_copy_bytes_freed += size;
   if (tex_copies_freed <= 10 || tex_copies_freed % 50 == 0) debugPrintf("texture CPU copy freed after upload: %uKB (total %u copies, %uKB)\n", size / 1024, tex_copies_freed, tex_copy_bytes_freed / 1024);
 }
