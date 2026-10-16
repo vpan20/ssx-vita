@@ -313,9 +313,9 @@ static void render_acct(void *cat, int delta) {
 unsigned render_live_kb(void) { return render_live / 1024; }
 unsigned render_peak_kb(void) { return render_peak / 1024; }
 static void memcat_trace(void *cat, unsigned size, const char *name, void *ra) {
-  static int n; if (size < 128 * 1024 || n >= 600) return;
+  static int n; if (size < 128 * 1024 || n >= 900) return;
   const char *cn = (const char *)cat + 0x1E0;
-  if (strcmp(cn, "Render") && strcmp(cn, "Audio::Data") && strncmp(cn, "GameWorld", 9) && strncmp(cn, "GP::", 4)) return;
+  if (strcmp(cn, "Render") && strncmp(cn, "Audio::", 7) && strncmp(cn, "GameWorld", 9) && strncmp(cn, "GP::", 4) && strncmp(cn, "FE::", 4)) return;
   n++; debugPrintf("memalloc %s %uKB '%s' from game+0x%X\n", cn, size / 1024, name ? name : "", (unsigned)((uintptr_t)ra - game_mod.text_base));
 }
 static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); void *p = orig_CatAlloc5(cat, size, name, a, b, c); if (p) render_acct(cat, (int)size); return p; }
