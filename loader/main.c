@@ -24,11 +24,11 @@
 #define SCREEN_H 544
 #define LOAD_ADDR_GAME   0x94000000
 #define LOAD_ADDR_GNUSTL 0x9C000000   // libgame.so is ~40MB mapped; keep gnustl clear of it
-#define MEMORY_NEWLIB_MB 297   // +22MB for GameWorld::SlotAlloc 26M (Alps race asks 24.6MB in one block); VitaGL RAM pool ~13MB (uses ~2MB)
+#define MEMORY_NEWLIB_MB 293   // +22MB for GameWorld::SlotAlloc 26M (Alps race asks 24.6MB in one block); VitaGL RAM pool ~13MB (uses ~2MB)
 #define MEMORY_VITAGL_MB 16          // tune: game streams textures from .big caches
 
 int _newlib_heap_size_user = MEMORY_NEWLIB_MB * 1024 * 1024;
-unsigned int sceLibcHeapSize = 5 * 1024 * 1024;   // SceLibc heap (ShaccCg compiles use it); 8->5M, the 3M went to newlib
+unsigned int sceLibcHeapSize = 4 * 1024 * 1024;   // SceLibc heap (ShaccCg compiles use it); 8->5M, the 3M went to newlib
 unsigned int sceUserMainThreadStackSize = 1 * 1024 * 1024;
 extern so_default_dynlib default_dynlib[]; extern int default_dynlib_size;
 
@@ -315,7 +315,7 @@ unsigned render_peak_kb(void) { return render_peak / 1024; }
 static void memcat_trace(void *cat, unsigned size, const char *name, void *ra) {
   static int n; if (size < 128 * 1024 || n >= 900) return;
   const char *cn = (const char *)cat + 0x1E0;
-  if (strcmp(cn, "Render") && strncmp(cn, "Audio::", 7) && strncmp(cn, "GameWorld", 9) && strncmp(cn, "GP::", 4) && strncmp(cn, "FE::", 4)) return;
+  if (strcmp(cn, "Render") && strcmp(cn, "Global") && strncmp(cn, "Sys::", 5) && strncmp(cn, "Audio::", 7) && strncmp(cn, "GameWorld", 9) && strncmp(cn, "GP::", 4) && strncmp(cn, "FE::", 4)) return;
   n++; debugPrintf("memalloc %s %uKB '%s' from game+0x%X\n", cn, size / 1024, name ? name : "", (unsigned)((uintptr_t)ra - game_mod.text_base));
 }
 static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); void *p = orig_CatAlloc5(cat, size, name, a, b, c); if (p) render_acct(cat, (int)size); return p; }
