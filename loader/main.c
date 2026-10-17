@@ -348,9 +348,10 @@ static void memcat_trace(void *cat, unsigned size, const char *name, void *ra) {
   if (strcmp(cn, "Render") && strcmp(cn, "Global") && strncmp(cn, "Sys::", 5) && strncmp(cn, "Audio::", 7) && strncmp(cn, "GameWorld", 9) && strncmp(cn, "GP::", 4) && strncmp(cn, "FE::", 4)) return;
   n++; debugPrintf("memalloc %s %uKB '%s' from game+0x%X\n", cn, size / 1024, name ? name : "", (unsigned)((uintptr_t)ra - game_mod.text_base));
 }
-static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); void *p = orig_CatAlloc5(cat, size, name, a, b, c); if (p) render_acct(cat, (int)size); return p; }
+static int acct_depth;   // Alloc5 may route through Alloc2: count once (live 79MB in a 48M pool was the double count)
+static void *hook_CatAlloc5(void *cat, unsigned size, const char *name, unsigned a, unsigned b, unsigned c) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); acct_depth++; void *p = orig_CatAlloc5(cat, size, name, a, b, c); acct_depth--; if (p) render_acct(cat, (int)size); return p; }
 static void *(*orig_CatAlloc2)(void *, unsigned, const char *);
-static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); void *p = orig_CatAlloc2(cat, size, name); if (p) render_acct(cat, (int)size); return p; }
+static void *hook_CatAlloc2(void *cat, unsigned size, const char *name) { if (acct_depth) return orig_CatAlloc2(cat, size, name); memcat_seen(cat); memcat_trace(cat, size, name, __builtin_return_address(0)); void *p = orig_CatAlloc2(cat, size, name); if (p) render_acct(cat, (int)size); return p; }
 static void (*orig_CatFree)(void *, void *);
 static void hook_CatFree(void *cat, void *p) { if (p && cat == render_cat && cat_usable) render_acct(cat, -(int)cat_usable(cat, p)); orig_CatFree(cat, p); }
 // RNA::TexturePlatC keeps a CPU copy of every texture's pixels (this+0x40, from the Render pool; 30MB+ for one track
@@ -571,7 +572,7 @@ int main(int argc, char *argv[]) {
   for (;;) {
     if (frame < 5 || frame % 100 == 0) { SceKernelFreeMemorySizeInfo fi = { .size = sizeof fi }; sceKernelGetFreeMemorySize(&fi); struct mallinfo mi = mallinfo(); void *probe = malloc(1 << 20); debugPrintf("frame %u begin (free user=%dKB cdram=%dKB) newlib heap: used %uKB free %uKB arena %uKB 1MB-probe %s\n", frame, fi.size_user / 1024, fi.size_cdram / 1024, (unsigned)mi.uordblks / 1024, (unsigned)mi.fordblks / 1024, (unsigned)mi.arena / 1024, probe ? "ok" : "FAILED"); free(probe);
       if (frame % 300 == 0) memcat_report();
-      debugPrintf("Render pool live %uKB peak %uKB\n", render_live_kb(), render_peak_kb());
+      { extern unsigned emerg_stats(int *); int el = 0; unsigned ek = emerg_stats(&el); debugPrintf("Render pool live %uKB peak %uKB; emergency allocs live %d (%uKB served)\n", render_live_kb(), render_peak_kb(), el, ek); }
       { extern unsigned jni_n_str, jni_n_arr, jni_b_arr, jni_n_del; debugPrintf("JNI objects so far: strings %u arrays %u (%uKB) DeleteLocalRef %u\n", jni_n_str, jni_n_arr, jni_b_arr / 1024, jni_n_del); } }
     frame++;
     SceCtrlData pad; sceCtrlPeekBufferPositive(0, &pad, 1);

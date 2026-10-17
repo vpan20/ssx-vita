@@ -323,8 +323,12 @@ int rename_fix(const char *a, const char *c) { char b1[512], b2[512]; return ren
 // Only the 26MB GameWorld::SlotAlloc slab fits phycont; everything else falls through to newlib unchanged.
 // Persistent scratch for VitaGL's glCopyTexImage2D readback (CI sed patch calls this instead of vglMalloc+vgl_free):
 // grows to the largest request once (RAM pool, else VRAM, else newlib) and is reused forever. Single-threaded by gl_lock.
+static void *scratch_buf; static size_t scratch_cap;
+static void *vgl_scratch_buf_peek(void) { return scratch_buf; }
 void *vgl_scratch_get(size_t n) {
-  static void *buf; static size_t cap;
+  void **bufp = &scratch_buf; size_t *capp = &scratch_cap;
+#define buf (*bufp)
+#define cap (*capp)
   if (n <= cap) return buf;
   void *p = vglAlloc(n, VGL_MEM_RAM); int pool = 1;
   if (!p) { p = vglAlloc(n, VGL_MEM_VRAM); pool = 0; }
@@ -333,7 +337,12 @@ void *vgl_scratch_get(size_t n) {
   if (buf) { if (cap && pool != 4) vglFree(buf); }   // (old block was from a vgl pool: free it; a newlib one is leaked, it is tiny vs the heap)
   buf = p; cap = n; debugPrintf("vgl_scratch_get: %uKB from pool %d\n", (unsigned)(n / 1024), pool);
   return buf;
+#undef buf
+#undef cap
 }
+static void *vgl_scratch_buf_peek(void);
+void vgl_scratch_put(void *p) { extern void vgl_free(void *); if (p && p != vgl_scratch_buf_peek()) vgl_free(p); }   // frees only non-scratch pointers (other decode paths)
+
 static struct { void *p; size_t n; } big_tab[8]; static int big_n;
 static void *big_alloc(size_t n) {
   if (n < 6u * 1024 * 1024 || big_n >= 8) return NULL;
@@ -351,10 +360,45 @@ static void *big_alloc(size_t n) {
   return p;
 }
 static int big_free(void *p) { for (int i = 0; i < big_n; i++) if (big_tab[i].p == p) { vglFree(p); big_tab[i] = big_tab[--big_n]; return 1; } return 0; }
-void free_big(void *p) { if (p && big_free(p)) return; free(p); }
-void *malloc_log(size_t n) { void *p = big_alloc(n); if (!p) p = malloc(n); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
-void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
-void *memalign_log(size_t al, size_t n) { void *p = al <= 4096 ? big_alloc(n) : NULL; if (!p) p = memalign(al, n); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
+// Emergency allocator: when newlib is exhausted (run d85665d: calloc(140) -> NULL -> abort at race load) serve the request
+// from VitaGL's RAM pool, then VRAM (CPU-mapped, slower, but alive). 16-byte header holds the size; pointers are kept in
+// an open-addressing set so free/realloc can tell them apart from newlib pointers.
+#define EMERG_HDR 16
+#define EMERG_SET 16384
+static void *emerg_set[EMERG_SET]; static int emerg_live; static unsigned emerg_total, emerg_bytes;
+static unsigned emerg_h(void *p) { return ((uintptr_t)p >> 4) * 2654435761u % EMERG_SET; }
+static int emerg_find(void *p) { unsigned i = emerg_h(p); for (int k = 0; k < EMERG_SET; k++, i = (i + 1) % EMERG_SET) { if (emerg_set[i] == p) return (int)i; if (!emerg_set[i]) return -1; } return -1; }
+static void *emerg_alloc(size_t n, size_t al) {
+  if (al > 16 || emerg_live >= EMERG_SET / 2) return NULL;
+  int pool = 1; char *raw = vglAlloc(n + EMERG_HDR, VGL_MEM_RAM);
+  if (!raw) { raw = vglAlloc(n + EMERG_HDR, VGL_MEM_VRAM); pool = 0; }
+  if (!raw) return NULL;
+  *(size_t *)raw = n; void *p = raw + EMERG_HDR;
+  unsigned i = emerg_h(p); while (emerg_set[i]) i = (i + 1) % EMERG_SET; emerg_set[i] = p; emerg_live++; emerg_total++; emerg_bytes += n;
+  if (emerg_total <= 20 || (emerg_total % 500) == 0) debugPrintf("heap full: %u bytes from VitaGL pool %d (emergency allocs %u live %d, %uKB total)\n", (unsigned)n, pool, emerg_total, emerg_live, emerg_bytes / 1024);
+  return p;
+}
+static int emerg_free(void *p) {
+  int i = emerg_find(p); if (i < 0) return 0;
+  vglFree((char *)p - EMERG_HDR); emerg_live--;
+  // re-insert the probe chain after the hole
+  emerg_set[i] = NULL; unsigned j = (i + 1) % EMERG_SET;
+  while (emerg_set[j]) { void *q = emerg_set[j]; emerg_set[j] = NULL; unsigned k = emerg_h(q); while (emerg_set[k]) k = (k + 1) % EMERG_SET; emerg_set[k] = q; j = (j + 1) % EMERG_SET; }
+  return 1;
+}
+unsigned emerg_stats(int *live) { if (live) *live = emerg_live; return emerg_bytes / 1024; }
+void free_big(void *p) { if (!p) return; if (big_free(p)) return; if (emerg_live && emerg_free(p)) return; free(p); }
+void *malloc_log(size_t n) { void *p = big_alloc(n); if (!p) p = malloc(n); if (!p) p = emerg_alloc(n, 16); if (n >= 0x100000 || !p) debugPrintf("malloc(%u) -> %p\n", (unsigned)n, p); return p; }
+void *calloc_log(size_t a, size_t b) { void *p = calloc(a, b); if (!p) { p = emerg_alloc(a * b, 16); if (p) memset(p, 0, a * b); } if (a * b >= 0x100000 || !p) debugPrintf("calloc(%u) -> %p\n", (unsigned)(a * b), p); return p; }
+void *memalign_log(size_t al, size_t n) { void *p = al <= 4096 ? big_alloc(n) : NULL; if (!p) p = memalign(al, n); if (!p) p = emerg_alloc(n, al); if (n >= 0x100000 || !p) debugPrintf("memalign(%u,%u) -> %p\n", (unsigned)al, (unsigned)n, p); return p; }
+void *realloc_log(void *old, size_t n) {
+  if (!old) return malloc_log(n);
+  if (emerg_live && emerg_find(old) >= 0) { size_t on = *(size_t *)((char *)old - EMERG_HDR); void *p = malloc_log(n); if (p) { memcpy(p, old, on < n ? on : n); emerg_free(old); } return p; }
+  void *p = realloc(old, n);
+  if (!p && n) { p = emerg_alloc(n, 16); if (p) { memcpy(p, old, malloc_usable_size(old) < n ? malloc_usable_size(old) : n); free(old); } }
+  if (!p && n) debugPrintf("realloc(%p,%u) -> NULL\n", old, (unsigned)n);
+  return p;
+}
 // GL wrappers (gl_lock.c)
 extern void *egl_get_proc_address_shim(const char *);
 extern void glActiveTexture_locked();
@@ -849,7 +893,7 @@ so_default_dynlib default_dynlib[] = {
   { "readdir", (uintptr_t)&readdir },
   { "readdir_r", (uintptr_t)&readdir_r },
   { "readlink", (uintptr_t)&readlink },
-  { "realloc", (uintptr_t)&realloc },
+  { "realloc", (uintptr_t)&realloc_log },
   { "recv", (uintptr_t)&recv },
   { "recvfrom", (uintptr_t)&recvfrom },
   { "remove", (uintptr_t)&remove_fix },

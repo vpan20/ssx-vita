@@ -110,9 +110,9 @@ static void asset_path(char *out, size_t n, const char *name) {
 // name (whitespace-delimited) and replace the whole size=... token, so conditionals like {{pc}?20M:100M} are
 // dropped. Applied to the in-memory copy only; the file on the card is untouched.
 static const struct { const char *name; const char *size; } memcfg_rules[] = {
-  { "AUDIODATA_GEN", "60M" },   { "GAMEPLAY_GEN", "22M" },    { "GAMEWORLD_GEN", "12M" },   // Android: AUDIODATA 100M (sample banks load whole; collisions.abk OOM at 14M), GAMEPLAY/GAMEWORLD 20M/20M (anim_all.cba 6.2MB -> GP::AnimData)
-  { "GLOBAL_GEN", "32M" },      { "RENDER_GEN", "48M" },      { "STL_GEN", "6M" },           { "FE_GEN", "7M" },
-  { "FE_SFGFX_GEN_A", "20M" },  { "FE_SFGFX_GEN_B", "2M" },    { "FE_SFGFX_AS_SBA", "2M" },
+  { "AUDIODATA_GEN", "60M" },   { "GAMEPLAY_GEN", "22M" },    { "GAMEWORLD_GEN", "8M" },   // Android: AUDIODATA 100M (sample banks load whole; collisions.abk OOM at 14M), GAMEPLAY/GAMEWORLD 20M/20M (anim_all.cba 6.2MB -> GP::AnimData)
+  { "GLOBAL_GEN", "32M" },      { "RENDER_GEN", "32M" },      { "STL_GEN", "5M" },           { "FE_GEN", "7M" },
+  { "FE_SFGFX_GEN_A", "16M" },  { "FE_SFGFX_GEN_B", "2M" },    { "FE_SFGFX_AS_SBA", "2M" },
   { "FE_SFGFX_ASCRIPT", "6M" }, { "FE_SFGFX_REN_SBA", "4M" },  { "FE_SFGFX_RENDER", "6M" },
   { "FE_UX_GEN", "2M" },        { "GLOBAL_ASSETTMP", "7M" },  { "GAMEWORLD_SLOTALLOC", "25M" },
   { "ASSETSTREAM_READBUF", "4M" }, { "AUDIO_RWAC", "8M" },   // 3M OOM'd on a 648KB 'Signal IR Buffer' (Audio::RwAudioCore) at race start; 8M = Xbox 360 size, paid by FE_SFGFX_GEN_A 30->25M

@@ -37,7 +37,12 @@ jobs:
           # several times a second in menus), tries newlib first (full) then the pools, and memcpy's into the NULL when all fail.
           # Use a persistent scratch buffer from the loader instead (allocated once, reused, never freed).
           sed -i 's|^\tvoid \*tmp = vglMalloc(width \* height \* 4);|\textern void *vgl_scratch_get(size_t); void *tmp = vgl_scratch_get(width * height * 4); if (!tmp) return;|; s|^\tvgl_free(tmp);|\t/* scratch kept */|' vitaGL/source/textures.c
-          grep -c vgl_scratch_get vitaGL/source/textures.c
+          # Same scratch for the CPU-side decompression of non-native compressed formats (ETC1 cubemap faces: 1024x1024x3 = 3MB per
+          # face, the '3072KB vglMalloc' that hit newlib first on every FE/race load). vgl_scratch_put() frees only non-scratch pointers.
+          sed -i 's|decompressed_data = vglMalloc(width \* height \* \([34]\));|decompressed_data = vgl_scratch_get(width * height * \1);|; s|^\(\t*\)vgl_free(decompressed_data);|\1{ extern void vgl_scratch_put(void *); vgl_scratch_put(decompressed_data); }|' vitaGL/source/textures.c
+          sed -i '0,/^void _glCompressedTexImage2D/s|^void _glCompressedTexImage2D|extern void *vgl_scratch_get(size_t);\nvoid _glCompressedTexImage2D|' vitaGL/source/textures.c
+          grep -c "vgl_scratch_get(width \* height" vitaGL/source/textures.c
+          grep -c vgl_scratch_put vitaGL/source/textures.c
           # Who asks vglMalloc for 3MB several times a second? Trace vglMalloc's own caller (type 9 = "vglMalloc entry").
           sed -i 's|^void \*vglMalloc(uint32_t size) {|extern void vgl_alloc_trace(size_t size, int type, void *ra);\nvoid *vglMalloc(uint32_t size) { vgl_alloc_trace(size, 9, __builtin_return_address(0));|' vitaGL/source/vgl.c
           grep -c "vgl_alloc_trace(size, 9" vitaGL/source/vgl.c
