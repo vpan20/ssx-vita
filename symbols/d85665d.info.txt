@@ -1,0 +1,14 @@
+build d85665d
+-rw-r--r-- 1 runner runner 661004 Oct 17 07:15 build/SSX.vpk
+-rw-r--r-- 1 runner runner 667280 Oct 17 07:15 build/eboot.bin
+Archive:  build/SSX.vpk
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+      912  2026-10-17 07:15   sce_sys/param.sfo
+   667280  2026-10-17 07:15   eboot.bin
+---------                     -------
+   668192                     2 files
+Done testing
+usage: vita-elf-create [-v|vv|vvv] [-s] [-n] [[-e | -g] config.yml] [-l <long_name_option>] [-m start,stop,exit] input.elf output.velf
+/usr/local/vitasdk/bin/vita-pack-vpk
+/usr/local/vitasdk/bin/vita-mksfoex
