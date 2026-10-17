@@ -319,6 +319,19 @@ int rename_fix(const char *a, const char *c) { char b1[512], b2[512]; return ren
 // Big game pools (>=20MB, allocated once at boot) are served from VitaGL's otherwise idle phycont (~26MB) and
 // cdialog-budget (~9MB) pools before touching the newlib heap, which the game's other pools fill to the byte.
 // Only the 26MB GameWorld::SlotAlloc slab fits phycont; everything else falls through to newlib unchanged.
+// Persistent scratch for VitaGL's glCopyTexImage2D readback (CI sed patch calls this instead of vglMalloc+vgl_free):
+// grows to the largest request once (RAM pool, else VRAM, else newlib) and is reused forever. Single-threaded by gl_lock.
+void *vgl_scratch_get(size_t n) {
+  static void *buf; static size_t cap;
+  if (n <= cap) return buf;
+  void *p = vglAlloc(n, VGL_MEM_RAM); int pool = 1;
+  if (!p) { p = vglAlloc(n, VGL_MEM_VRAM); pool = 0; }
+  if (!p) { p = malloc(n); pool = 4; }
+  if (!p) { debugPrintf("vgl_scratch_get(%uKB) FAILED (had %uKB)\n", (unsigned)(n / 1024), (unsigned)(cap / 1024)); return NULL; }
+  if (buf) { if (cap && pool != 4) vglFree(buf); }   // (old block was from a vgl pool: free it; a newlib one is leaked, it is tiny vs the heap)
+  buf = p; cap = n; debugPrintf("vgl_scratch_get: %uKB from pool %d\n", (unsigned)(n / 1024), pool);
+  return buf;
+}
 static struct { void *p; size_t n; } big_tab[8]; static int big_n;
 static void *big_alloc(size_t n) {
   if (n < 6u * 1024 * 1024 || big_n >= 8) return NULL;

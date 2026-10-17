@@ -33,6 +33,11 @@ jobs:
           # Allocation tracing: every pool allocation reports (size, pool, caller) to vgl_alloc_trace() in the loader.
           sed -i 's|^void \*vgl_malloc(size_t size, vglMemType type) {|extern void vgl_alloc_trace(size_t size, int type, void *ra);\nvoid *vgl_malloc(size_t size, vglMemType type) { vgl_alloc_trace(size, type, __builtin_return_address(0));|; s|^void \*vgl_calloc(size_t num, size_t size, vglMemType type) {|void *vgl_calloc(size_t num, size_t size, vglMemType type) { vgl_alloc_trace(num * size, type, __builtin_return_address(0));|; s|^void \*vgl_memalign(size_t alignment, size_t size, vglMemType type) {|void *vgl_memalign(size_t alignment, size_t size, vglMemType type) { vgl_alloc_trace(size, type, __builtin_return_address(0));|' vitaGL/source/utils/mem_utils.c
           grep -c vgl_alloc_trace vitaGL/source/utils/mem_utils.c
+          # glCopyTexImage2D readback scratch: VitaGL vglMalloc()s width*height*4 per call (3MB for the FE's 1024x768 blur copies,
+          # several times a second in menus), tries newlib first (full) then the pools, and memcpy's into the NULL when all fail.
+          # Use a persistent scratch buffer from the loader instead (allocated once, reused, never freed).
+          sed -i 's|^\tvoid \*tmp = vglMalloc(width \* height \* 4);|\textern void *vgl_scratch_get(size_t); void *tmp = vgl_scratch_get(width * height * 4); if (!tmp) return;|; s|^\tvgl_free(tmp);|\t/* scratch kept */|' vitaGL/source/textures.c
+          grep -c vgl_scratch_get vitaGL/source/textures.c
           # Crash fix: with HAVE_SHADER_CACHE, a shader that FAILS to compile (s->prog == NULL) is still serialized to the
           # cache -> memcpy(buf, NULL, s->size) on the translator thread (the 21382-byte NULL-source data abort). Skip the write.
           sed -i 's|^\tSceUID f = sceIoOpen(cache_fname, SCE_O_CREAT \| SCE_O_WRONLY \| SCE_O_TRUNC, 0777);|\tif (!s->prog) return;\n\tSceUID f = sceIoOpen(cache_fname, SCE_O_CREAT \| SCE_O_WRONLY \| SCE_O_TRUNC, 0777);|' vitaGL/source/custom_shaders.c
