@@ -38,6 +38,9 @@ jobs:
           # Use a persistent scratch buffer from the loader instead (allocated once, reused, never freed).
           sed -i 's|^\tvoid \*tmp = vglMalloc(width \* height \* 4);|\textern void *vgl_scratch_get(size_t); void *tmp = vgl_scratch_get(width * height * 4); if (!tmp) return;|; s|^\tvgl_free(tmp);|\t/* scratch kept */|' vitaGL/source/textures.c
           grep -c vgl_scratch_get vitaGL/source/textures.c
+          # Who asks vglMalloc for 3MB several times a second? Trace vglMalloc's own caller (type 9 = "vglMalloc entry").
+          sed -i 's|^void \*vglMalloc(uint32_t size) {|extern void vgl_alloc_trace(size_t size, int type, void *ra);\nvoid *vglMalloc(uint32_t size) { vgl_alloc_trace(size, 9, __builtin_return_address(0));|' vitaGL/source/vgl.c
+          grep -c "vgl_alloc_trace(size, 9" vitaGL/source/vgl.c
           # Crash fix: with HAVE_SHADER_CACHE, a shader that FAILS to compile (s->prog == NULL) is still serialized to the
           # cache -> memcpy(buf, NULL, s->size) on the translator thread (the 21382-byte NULL-source data abort). Skip the write.
           sed -i 's|^\tSceUID f = sceIoOpen(cache_fname, SCE_O_CREAT \| SCE_O_WRONLY \| SCE_O_TRUNC, 0777);|\tif (!s->prog) return;\n\tSceUID f = sceIoOpen(cache_fname, SCE_O_CREAT \| SCE_O_WRONLY \| SCE_O_TRUNC, 0777);|' vitaGL/source/custom_shaders.c

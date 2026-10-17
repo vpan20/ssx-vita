@@ -58,7 +58,7 @@ static char last_src_full[32768]; static int shader_fail_dumps;
 static struct { GLuint sh; char *src; } src_tab[64]; static int src_tab_n;
 static void remember_src(GLuint sh, const char *src) {
   for (int i = 0; i < 64; i++) if (src_tab[i].sh == sh) { free(src_tab[i].src); src_tab[i].src = strdup(src); return; }
-  int i = src_tab_n++ % 64; free(src_tab[i].src); src_tab[i].sh = sh; src_tab[i].src = strdup(src);
+  int i = src_tab_n++ % 64; free(src_tab[i].src); src_tab[i].sh = sh; src_tab[i].src = strdup(src); if (!src_tab[i].src) src_tab[i].sh = 0;
 }
 static const char *recall_src(GLuint sh) { for (int i = 0; i < 64; i++) if (src_tab[i].sh == sh) return src_tab[i].src; return NULL; }
 static void dump_src(GLuint sh) {
@@ -72,7 +72,7 @@ static void dump_src(GLuint sh) {
 static int is_id_char(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '[' || c == ']'; }
 static char *glsl_prepass(const char *src, int len) {
   int extra = 0; for (int i = 0; i + 1 < len; i++) if (src[i] == '*' && src[i+1] == '=') extra += 64;
-  char *out = malloc(len + extra + 1); int o = 0;
+  char *out = malloc(len + extra + 1); int o = 0; if (!out) return NULL;
   for (int i = 0; i < len; ) {
     if (src[i] == '*' && i + 1 < len && src[i+1] == '=') {
       int e = o; while (e > 0 && (out[e-1] == ' ' || out[e-1] == '\t')) e--;   // end of lhs in out
@@ -86,7 +86,7 @@ static char *glsl_prepass(const char *src, int len) {
 }
 // rename `tex` to `s_tex` in GLSL source: `tex` is a built-in function name in Cg and gets dropped
 static char *rename_tex_sampler(const char *src, int len) {
-  char *out = malloc(len * 2 + 64); int o = 0, i = 0;
+  char *out = malloc(len * 2 + 64); int o = 0, i = 0; if (!out) return NULL;
   while (i < len) {
     if (i + 3 <= len && memcmp(src + i, "tex", 3) == 0) {
       int pre = i > 0 ? src[i-1] : 0; int post = (i+3 < len) ? src[i+3] : 0;
@@ -105,7 +105,7 @@ static char *rename_tex_sampler(const char *src, int len) {
 // Prefix "static " to every file-scope declaration that is not uniform/attribute/varying/const/struct/precision.
 static char *static_globals(const char *src, int len) {
   int lines = 1; for (int i = 0; i < len; i++) if (src[i] == '\n') lines++;
-  char *out = malloc(len + lines * 7 + 1); int o = 0, depth = 0, i = 0;
+  char *out = malloc(len + lines * 7 + 1); int o = 0, depth = 0, i = 0; if (!out) return NULL;
   while (i < len) {
     int e = i; while (e < len && src[e] != '\n') e++;             // [i,e) = line
     int b = i; while (b < e && (src[b] == ' ' || src[b] == '\t')) b++;
@@ -127,8 +127,9 @@ void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *l
     int h = l > 380 ? 380 : l; memcpy(last_src_head, src[0], h); last_src_head[h] = 0;
     if (n == 1) {
       char *fixed = glsl_prepass(src[0], l);
-      char *renamed = rename_tex_sampler(fixed, strlen(fixed)); free(fixed);
-      char *final = static_globals(renamed, strlen(renamed)); free(renamed);
+      char *renamed = fixed ? rename_tex_sampler(fixed, strlen(fixed)) : NULL; free(fixed);
+      char *final = renamed ? static_globals(renamed, strlen(renamed)) : NULL; free(renamed);
+      if (!final) { debugPrintf("glShaderSource: heap too full to pre-process shader %u (%d bytes), passing it through\n", sh, l); glShaderSource(sh, n, src, len); return; }
       remember_src(sh, final);
       { size_t fl = strlen(final); if (fl >= sizeof last_src_full) fl = sizeof last_src_full - 1; memcpy(last_src_full, final, fl); last_src_full[fl] = 0; }
       const GLchar *one[1] = { final }; glShaderSource(sh, 1, one, NULL); free(final); return;
@@ -139,6 +140,7 @@ void glShaderSource_log(GLuint sh, GLsizei n, const GLchar **src, const GLint *l
 void glCompileShader_log(GLuint sh) {
   glCompileShader(sh);
   GLint ok = 0; glGetShaderiv(sh, GL_COMPILE_STATUS, &ok);
+  if (ok) { for (int i = 0; i < 64; i++) if (src_tab[i].sh == sh) { free(src_tab[i].src); src_tab[i].src = NULL; src_tab[i].sh = 0; } }   // keep sources only for failures
   if (!ok) { char log[1024] = ""; GLsizei ln = 0; glGetShaderInfoLog(sh, sizeof log, &ln, log);
     debugPrintf("SHADER COMPILE FAIL (%u): %s\n--- source head ---\n%s\n---\n", sh, log, last_src_head);
     if (shader_fail_dumps++ < 3) { debugPrintf("--- full source of failed shader %u ---\n", sh); for (char *q = last_src_full; *q; ) { char *e = strchr(q, '\n'); if (!e) { debugPrintf("%s\n", q); break; } *e = 0; debugPrintf("%s\n", q); q = e + 1; } debugPrintf("--- end ---\n"); } }

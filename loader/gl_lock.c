@@ -18,6 +18,7 @@ static unsigned c_texsub_calls, c_texsub_px, c_subdata_calls, c_subdata_bytes, c
 static float c_clear_r, c_clear_g, c_clear_b, c_clear_a;
 // Called by VitaGL (patched in CI) on every pool allocation: size, pool (0 VRAM 1 RAM 2 PHYCONT 3 BUDGET 4 newlib), caller.
 void vgl_alloc_trace(size_t size, int type, void *ra) {
+  if (type == 9) { static unsigned n; if (size >= 1024 * 1024 && n++ < 40) debugPrintf("vglMalloc %uKB called from %p\n", (unsigned)(size / 1024), ra); return; }   // vglMalloc entry (CI patch): its caller, not counted
   if (type < 0 || type > 4) type = 4;
   c_alloc_n[type]++; c_alloc_kb[type] += (unsigned)(size / 1024);
   if (size >= 256 * 1024 && c_alloc_big_logged < 300) { c_alloc_big_logged++; debugPrintf("vglAlloc %uKB pool %d from %p\n", (unsigned)(size / 1024), type, ra); }
