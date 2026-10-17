@@ -600,6 +600,11 @@ int main(int argc, char *argv[]) {
     SceUInt64 t1 = sceKernelGetProcessTimeWide();
     if (frame <= 5) { GLenum e = glGetError(); if (e) debugPrintf("  glError 0x%X after frame %u\n", e, frame - 1); }
     extern volatile unsigned jni_swap_count;
+    { // stall watchdog: the game presented for a while, then stopped for ~80s (loads pause presenting for <=50s) -> force a
+      // crash so the dump carries every thread's PC (frame 10000 of run 1b514f4 froze with FGGameRender 'run', no draws)
+      static unsigned last_cnt, last_frame, armed; if (jni_swap_count != last_cnt) { last_cnt = jni_swap_count; last_frame = frame; if (jni_swap_count > 1000) armed = 1; }
+      else if (armed && frame - last_frame > 2400) { debugPrintf("STALL: no present for %u frames (last at frame %u) - forcing a dump\n", frame - last_frame, last_frame); sceKernelDelayThread(200000); *(volatile int *)0x10 = 0; }
+    }
     if (!jni_swap_count) loader_present();                 // game has not presented through EGL yet: keep the screen alive from here
     else sceDisplayWaitVblankStartMulti(SSX_VSYNC_INTERVAL > 0 ? SSX_VSYNC_INTERVAL : 1);   // pace NativeOnDrawFrame like the old swap did; the render thread presents
     { // frame timing: per 100 frames, avg/max of game update+render (DrawFrame) and of the swap, plus frames over 33ms
