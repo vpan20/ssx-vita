@@ -74,7 +74,7 @@ jobs:
           git config user.name "ssx-ci" && git config user.email "ci@users.noreply.github.com"
           git fetch origin symbols && git checkout symbols || git checkout --orphan symbols
           git rm -rfq --cached . >/dev/null 2>&1 || true
-          mkdir -p symbols && cp /tmp/sym/* symbols/ && git add -f symbols && git commit -qm "symbols for $SHA" && git push origin symbols
+          mkdir -p symbols && cp /tmp/sym/* symbols/ && git add -f symbols && (git commit -qm "symbols for $SHA" && git push origin symbols || echo "symbols for $SHA already published")
       - name: Upload VPK
         uses: actions/upload-artifact@v4
         with:
