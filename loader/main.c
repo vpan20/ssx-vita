@@ -106,6 +106,27 @@ static void patch_spin(uintptr_t off) {
   kuKernelCpuUnrestrictedMemcpy((void *)site, &b, 4); kuKernelFlushCaches((void *)site, 4);
   debugPrintf("patch_spin @%p -> thunk %p\n", (void *)site, at);
 }
+// NULL guard patch: at `site` (an ARM "ldr r3,[r0]" = 0xE5903000) branch to a thunk that returns to `ret_off` (a "pop ... pc"
+// in the same function) when r0 is NULL, else executes the original load and resumes at site+4.
+static void patch_null_guard(uintptr_t off, uintptr_t ret_off, const char *what) {
+  uintptr_t site = game_mod.text_base + off, ret = game_mod.text_base + ret_off;
+  if (*(uint32_t *)site != 0xE5903000) { debugPrintf("patch_null_guard %s @%p: unexpected code %08X\n", what, (void *)site, *(uint32_t *)site); return; }
+  if (!tramp_pool) tramp_pool = (uint8_t *)(game_mod.text_base + 0x166C640);
+  if (tramp_used + 32 > 0x9C0) { debugPrintf("trampoline pool full\n"); return; }
+  uint8_t *at = tramp_pool + tramp_used;
+  uint32_t t[6] = {
+    0xE3500000,              // cmp r0,#0
+    0x051FF004,              // ldreq pc,[pc,#-4] -> next word... (pc = this+8 -> word at +4 = index 2)
+    (uint32_t)ret,           // ret (taken only when eq)
+    0xE5903000,              // ldr r3,[r0]
+    0xE51FF004,              // ldr pc,[pc,#-4] -> index 5
+    (uint32_t)(site + 4),
+  };
+  kuKernelCpuUnrestrictedMemcpy(at, t, sizeof t); kuKernelFlushCaches(at, sizeof t); tramp_used += sizeof t;
+  int32_t rel = ((int32_t)((uintptr_t)at - (site + 8))) >> 2; uint32_t b = 0xEA000000 | (rel & 0x00FFFFFF);
+  kuKernelCpuUnrestrictedMemcpy((void *)site, &b, 4); kuKernelFlushCaches((void *)site, 4);
+  debugPrintf("patch_null_guard %s @%p -> thunk %p\n", what, (void *)site, at);
+}
 #define HOOK(off, fn, orig_var) do { uintptr_t a = game_mod.text_base + (off); orig_var = make_trampoline(a); if (orig_var) hook_addr(a, (uintptr_t)fn); debugPrintf("hook " #fn " @%p tramp=%p\n", (void *)a, orig_var); } while (0)
 
 // AssetStream::Loader::TranslateStream(parent, asset, stream, flag) — an asset released while still queued reaches
@@ -409,7 +430,10 @@ static void install_hooks(void) {
   HOOK(0x14ee2c, hook_CatAlloc2, orig_CatAlloc2);
   cat_usable = (unsigned (*)(void *, void *))(game_mod.text_base + 0x14f240);
   HOOK(0x14f214, hook_CatFree, orig_CatFree);
-  patch_spin(0x651cec); patch_spin(0x65950c);   // EA::Ant::Anim::CacheLock::CacheLock (constprop clone + plain)
+  patch_spin(0x651cec); patch_spin(0x65950c);
+  // Audio::PathStream::Load dereferences PATH_createstreamimp()'s result without a check; it came back NULL once at boot
+  // (FE music, frame ~600, run 56914a4) and the game crashed. Treat it as "stream not loaded" (silent track) instead.
+  patch_null_guard(0x5ff834, 0x5ff878, "PathStream::Load");   // EA::Ant::Anim::CacheLock::CacheLock (constprop clone + plain)
   HOOK(0x1b7968, hook_FETutorialCheck, orig_FETutorialCheck);
   HOOK(0xa3b18c, hook_SfUnmap, orig_SfUnmap);
   HOOK(0x14b888, hook_OutOfMemory, orig_OutOfMemory);
