@@ -31,7 +31,8 @@ HEAP_SIZES = {
     "GAMEPLAY_GEN": "20M",         # 20M; a race needs 6.5 MB in one block (rewind)
     "GAMEWORLD_GEN": "4M",         # 20M; only ~10 KB used in menus, races and the tutorial
     "ONLINE_GEN": "2M",            # 2M; 512K ran out (ghost replays)
-    "GLOBAL_GEN": "10M",           # 15M
+    "GLOBAL_GEN": "32M",           # 7833: 45M on Android; this build allocates the 25 MB ghost container as one
+                                   # Global block ('SaveLoadFileBuffer', measured), 28M ran out on it; lukebrl's 8430: 10M
     "STL_GEN": "2M",               # 10M; ~0.1M used at the main menu, at most 0.6M in a long session
     "RENDER_SBA": "5M",            # 5M
     "FE_SBA": "4M",                # 4M

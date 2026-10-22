@@ -1,0 +1,40 @@
+name: Build ssx_vita.vpk (7833)
+on: [push, workflow_dispatch]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VITASDK: /usr/local/vitasdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install soft-float VitaSDK
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake git make curl
+          git clone --depth 1 https://github.com/vitasdk-softfp/vdpm
+          cd vdpm && sudo -E ./bootstrap-vitasdk.sh && sudo -E ./install-all.sh
+          sudo chown -R $USER $VITASDK
+      - name: Install vitaShaRK and math-neon
+        run: |
+          export PATH=$VITASDK/bin:$PATH
+          git clone --depth 1 https://github.com/Rinnegatamante/vitaShaRK && make -C vitaShaRK install
+          git clone --depth 1 https://github.com/Rinnegatamante/math-neon && make -C math-neon install
+      - name: Build (release and debug)
+        run: |
+          export PATH=$VITASDK/bin:$PATH
+          cmake --version
+          cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DDUMP_COMPILED_SHADERS=OFF
+          cmake --build build-release -j"$(nproc)"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDUMP_COMPILED_SHADERS=OFF
+          cmake --build build -j"$(nproc)"
+          ls -l build-release/*.vpk build/*.vpk build-release/*.elf build/*.elf 2>/dev/null || true
+      - name: Upload VPKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssx_vita-7833
+          path: |
+            build-release/ssx_vita.vpk
+            build-release/*.elf
+            build/ssx_vita_debug.vpk
+            build/*.elf
