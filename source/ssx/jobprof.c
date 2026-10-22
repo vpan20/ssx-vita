@@ -29,11 +29,11 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_JobInstanceHandle_WaitOn 0xf19e34 // EA::Jobs::JobInstanceHandle::WaitOn(WaitOnControl (*)(void*), void*, int) const
-#define OFF_JobContextImpl_RunOneJob 0xf1872c // EA::Jobs::Detail::JobContextImpl::RunOneJob()
-#define OFF_JobContextImpl_DispatchJob 0xf180a0 // EA::Jobs::Detail::JobContextImpl::DispatchJob(JobInstance*)
-#define OFF_sIsAppPaused 0x1863d20 // EA::Jobs::JobContext::sIsAppPaused: job threads only sleep while set
+// libgame.so v0.0.7833
+#define OFF_JobInstanceHandle_WaitOn 0xef09b4 // EA::Jobs::JobInstanceHandle::WaitOn(WaitOnControl (*)(void*), void*, int) const
+#define OFF_JobContextImpl_RunOneJob 0xeef2ac // EA::Jobs::Detail::JobContextImpl::RunOneJob()
+#define OFF_JobContextImpl_DispatchJob 0xeeec20 // EA::Jobs::Detail::JobContextImpl::DispatchJob(JobInstance*)
+#define OFF_sIsAppPaused 0x17d5a10 // EA::Jobs::JobContext::sIsAppPaused: job threads only sleep while set
 
 typedef uint64_t (*Fn8)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 static Fn8 WaitOn_orig, RunOneJob_orig, DispatchJob_orig;

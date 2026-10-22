@@ -52,13 +52,13 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_RefCountCollector_Collect 0x90a8b8 // RefCountCollector<323>::Collect(Stats*) (.part.70)
-#define OFF_HeapLimit_OnExceedLimit   0x90ae14 // MemoryContextImpl::HeapLimit::OnExceedLimit(MemoryHeap*, unsigned)
+// libgame.so v0.0.7833
+#define OFF_RefCountCollector_Collect 0x8e1e78 // RefCountCollector<323>::Collect(Stats*) (.part.70)
+#define OFF_HeapLimit_OnExceedLimit   0x8e23d4 // MemoryContextImpl::HeapLimit::OnExceedLimit(MemoryHeap*, unsigned)
 // In MovieRoot::ProcessLoadMovieClip: bl HeapLimit::Collect(heap), made when
 // a loaded movie replaces another
-#define OFF_LoadMovieClip_Collect     0x90b78c
-#define OFF_ASRefCountCollector_AdvanceFrame 0x90c1a0 // ASRefCountCollector::AdvanceFrame(unsigned*, unsigned*)
+#define OFF_LoadMovieClip_Collect     0x8e2d4c
+#define OFF_ASRefCountCollector_AdvanceFrame 0x8e3760 // ASRefCountCollector::AdvanceFrame(unsigned*, unsigned*)
 // ASRefCountCollector fields (AdvanceFrame): roots so far +8, frames since the
 // last collection +52, root threshold +56, preset root count +84, frames
 // between collections +88 (0: no collection by frame count)
@@ -87,10 +87,10 @@ static struct {
 
 #ifdef DEBUG_SOLOADER
 static const char *caller_name(uint32_t off) {
-    if (off >= 0x90acf8 && off < 0x90ade4) return "heap limit";
-    if (off >= 0x90abb0 && off < 0x90ac7c) return "ForceCollect";
-    if (off >= 0x90c058 && off < 0x90c1a0) return "emergency";
-    if (off >= 0x90c1a0 && off < 0x90c4bc) return "AdvanceFrame";
+    if (off >= 0x8e22b8 && off < 0x8e23a4) return "heap limit";
+    if (off >= 0x8e2170 && off < 0x8e223c) return "ForceCollect";
+    if (off >= 0x8e3618 && off < 0x8e3760) return "emergency";
+    if (off >= 0x8e3760 && off < 0x8e3a7c) return "AdvanceFrame";
     return "other";
 }
 

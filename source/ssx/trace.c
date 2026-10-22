@@ -233,29 +233,29 @@ static void SetLastError(void *op, int code) {
 void ssx_trace_patch(void) {
 	if (SSX_DIAG) {
 		// The ghost save's parts and errors, and every asset and audio file loaded
-		GhostIsDataValid_orig = (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0x23d864, (uintptr_t)&GhostIsDataValid);
+		GhostIsDataValid_orig = (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0x22c18c, (uintptr_t)&GhostIsDataValid);
 		GhostGetFileAccessInfo_orig =
-		    (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0x23d99c, (uintptr_t)&GhostGetFileAccessInfo);
-		GhostPrepareId_orig = (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0x23ddac, (uintptr_t)&GhostPrepareId);
-		SetLastError_orig = (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0xcc2564, (uintptr_t)&SetLastError);
+		    (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0x22c2c4, (uintptr_t)&GhostGetFileAccessInfo);
+		GhostPrepareId_orig = (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0x22c6d4, (uintptr_t)&GhostPrepareId);
+		SetLastError_orig = (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + 0xc996a8, (uintptr_t)&SetLastError);
 		if (!GhostIsDataValid_orig || !GhostGetFileAccessInfo_orig || !GhostPrepareId_orig || !SetLastError_orig)
 			l_error("[GHOSTSAVE] hooks failed");
-		unmanaged_load_hook = hook_addr(so_mod.text_base + 0x11dabe0, (uintptr_t)&FileManager_UnmanagedLoadFile);
-		rawasset_get_hook = hook_addr(so_mod.text_base + 0x66a73c, (uintptr_t)&AssetStream_GetRawAsset);
+		unmanaged_load_hook = hook_addr(so_mod.text_base + 0x11b1748, (uintptr_t)&FileManager_UnmanagedLoadFile);
+		rawasset_get_hook = hook_addr(so_mod.text_base + 0x641cfc, (uintptr_t)&AssetStream_GetRawAsset);
 	}
-	bootflow_update_hook = hook_addr(so_mod.text_base + 0x2ede94, (uintptr_t)&BootFlowOp_Update);
-	bootflow_error_hook = hook_addr(so_mod.text_base + 0x2ecdd8, (uintptr_t)&BootFlowOp_DoError);
-	operation_complete_hook = hook_addr(so_mod.text_base + 0x23d498, (uintptr_t)&Operation_Complete);
-	dac_create_hook = hook_addr(so_mod.text_base + 0x543808, (uintptr_t)&Dac_CreateInstance);
-	dac_platform_init_hook = hook_addr(so_mod.text_base + 0x542434, (uintptr_t)&Dac_PlatformAudioInit);
-	dac_resume_submit_hook = hook_addr(so_mod.text_base + 0x540b3c, (uintptr_t)&Dac_ResumeSubmitThread);
-	dac_create_thread_hook = hook_addr(so_mod.text_base + 0x541f2c, (uintptr_t)&Dac_CreateDacThread);
-	thread_begin_hook = hook_addr(so_mod.text_base + 0x4ade24, (uintptr_t)&EAThread_Begin);
-	nav_action_hook = hook_addr(so_mod.text_base + 0x6e9aa8, (uintptr_t)&NavDispatcherGFx_ProcessNavAction);
-	load_view_hook = hook_addr(so_mod.text_base + 0x705ca0, (uintptr_t)&ViewLoader_LoadView);
-	nav_event_hook = hook_addr(so_mod.text_base + 0x6ff534, (uintptr_t)&NavMessageClient_Event);
-	nav_server_action_hook = hook_addr(so_mod.text_base + 0x6fff30, (uintptr_t)&NavMessageServer_NavActionHandler);
-	nav_dispatch_action_hook = hook_addr(so_mod.text_base + 0x6fde7c, (uintptr_t)&NavDispatcher_NavActionHandle);
+	bootflow_update_hook = hook_addr(so_mod.text_base + 0x2dae94, (uintptr_t)&BootFlowOp_Update);
+	bootflow_error_hook = hook_addr(so_mod.text_base + 0x2db41c, (uintptr_t)&BootFlowOp_DoError);
+	operation_complete_hook = hook_addr(so_mod.text_base + 0x22bdc0, (uintptr_t)&Operation_Complete);
+	dac_create_hook = hook_addr(so_mod.text_base + 0x51b038, (uintptr_t)&Dac_CreateInstance);
+	dac_platform_init_hook = hook_addr(so_mod.text_base + 0x519c64, (uintptr_t)&Dac_PlatformAudioInit);
+	dac_resume_submit_hook = hook_addr(so_mod.text_base + 0x51836c, (uintptr_t)&Dac_ResumeSubmitThread);
+	dac_create_thread_hook = hook_addr(so_mod.text_base + 0x51975c, (uintptr_t)&Dac_CreateDacThread);
+	thread_begin_hook = hook_addr(so_mod.text_base + 0x485654, (uintptr_t)&EAThread_Begin);
+	nav_action_hook = hook_addr(so_mod.text_base + 0x6c1068, (uintptr_t)&NavDispatcherGFx_ProcessNavAction);
+	load_view_hook = hook_addr(so_mod.text_base + 0x6dd260, (uintptr_t)&ViewLoader_LoadView);
+	nav_event_hook = hook_addr(so_mod.text_base + 0x6d6af4, (uintptr_t)&NavMessageClient_Event);
+	nav_server_action_hook = hook_addr(so_mod.text_base + 0x6d74f0, (uintptr_t)&NavMessageServer_NavActionHandler);
+	nav_dispatch_action_hook = hook_addr(so_mod.text_base + 0x6d543c, (uintptr_t)&NavDispatcher_NavActionHandle);
 }
 
 #else

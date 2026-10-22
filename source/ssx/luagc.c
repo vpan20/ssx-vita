@@ -32,8 +32,8 @@
 
 extern so_module so_mod;
 
-#define OFF_ReleaseLuaState_gc 0xe7c5f0 // luavm::LuaStateManager::ReleaseLuaState: bl lua_gc(L, LUA_GCCOLLECT, 0)
-#define OFF_lua_gc 0xe92544
+#define OFF_ReleaseLuaState_gc 0xe53170 // luavm::LuaStateManager::ReleaseLuaState: bl lua_gc(L, LUA_GCCOLLECT, 0)
+#define OFF_lua_gc 0xe690c4
 #define ARM_NOP 0xe1a00000 // mov r0, r0
 #define LUA_GCCOLLECT 2
 

@@ -31,8 +31,8 @@
 
 extern so_module so_mod;
 
-// MemoryFramework::GetICoreAllocator(char const*) in libgame.so v0.0.8430
-#define OFF_GetICoreAllocator 0x15b838
+// MemoryFramework::GetICoreAllocator(char const*) in libgame.so v0.0.7833
+#define OFF_GetICoreAllocator 0x150518
 
 // The categories memory.cfg puts in RENDER_GEN
 static const char *const categories[] = {

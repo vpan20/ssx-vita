@@ -185,7 +185,7 @@ void ssx_draw_frame(void) {
 // no one can press anything before the first picture anyway. The front-end
 // data store comes later still: a button held at the boot logo crashed in
 // TouchController::HandleNIControllerClassicModeInput reading it.
-#define OFF_FEDataStoreInstance 0x17cdb7c // FEDataStore* (libgame.so v0.0.8430)
+#define OFF_FEDataStoreInstance 0x1742a4c // System::Singleton<FEDataStore>::sInstance (libgame.so v0.0.7833)
 
 static int input_ready(void) {
     return ssx_frames_presented > 0 && *(void *volatile *)(so_mod.text_base + OFF_FEDataStoreInstance) != NULL;

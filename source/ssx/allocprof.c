@@ -32,8 +32,8 @@ extern so_module so_mod;
 // Off unless built with -DSSX_ALLOCPROF=1: it costs a stack scan per allocation
 #if defined(DEBUG_SOLOADER) && SSX_ALLOCPROF
 
-#define OFF_Category_Alloc 0x15a26c // MemoryFramework::Category::Alloc(unsigned, char const*, unsigned, unsigned, unsigned)
-#define OFF_Category_Free 0x156388  // MemoryFramework::Category::Free(void*) [.part.9], what every free goes through
+#define OFF_Category_Alloc 0x14ef4c // MemoryFramework::Category::Alloc(unsigned, char const*, unsigned, unsigned, unsigned)
+#define OFF_Category_Free 0x14f214  // MemoryFramework::Category::Free(void*) [.part.9], what every free goes through
 // libgame's .text (return addresses; .rodata pointers on the stack, such as
 // allocation names, are not callers)
 #define TEXT_START 0xed6b8

@@ -54,9 +54,9 @@
 
 extern so_module so_mod;
 
-#define OFF_SetFpsLimit 0x10bd6c  // EA::Blast::FpsLimiter::SetFpsLimit(unsigned)
-#define OFF_OnEndOfFrame 0x10bcb8 // EA::Blast::FpsLimiter::OnEndOfFrame()
-#define OFF_Loop_ctor 0x105a03c   // GameKernel::Loop::Loop(float hz, ProcessType, unsigned)
+#define OFF_SetFpsLimit 0x100c24  // EA::Blast::FpsLimiter::SetFpsLimit(unsigned)
+#define OFF_OnEndOfFrame 0x100b70 // EA::Blast::FpsLimiter::OnEndOfFrame()
+#define OFF_Loop_ctor 0x1030ba4   // GameKernel::Loop::Loop(float hz, ProcessType, unsigned)
 #define MIN_FPS 60
 #define FRAME_MS (1000 / MIN_FPS)
 #define LOOP_SIM 0    // GameKernel::Loop::ProcessType of LoopSimulation
@@ -67,7 +67,7 @@ extern so_module so_mod;
 #define LOOP_AVG_NS(l) (*(volatile int64_t *)((uint8_t *)(l) + 128))
 #define LOOP_RATE(l) (*(volatile float *)((uint8_t *)(l) + 136))
 #define REPORT_MS 5000
-#define OFF_SetLoopFrequency 0x105a190 // GameKernel::Loop::SetLoopFrequency(float)
+#define OFF_SetLoopFrequency 0x1030cf8 // GameKernel::Loop::SetLoopFrequency(float)
 #define CHECK_MS 100
 #define WORLD_HEAP "GAMEWORLD_SLOTALLOC"
 #define WORLD_LOADED (12 * 1024 * 1024) // its largest free block under this: a race world is loaded

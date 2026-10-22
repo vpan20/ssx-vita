@@ -34,9 +34,9 @@
 
 extern so_module so_mod;
 
-// Offsets in libgame.so v0.0.8430 (local symbols)
-#define OFF_GetNextAllocator  0x15d798 // MemoryFramework::GetNextAllocator(sEnumAllocator&, MemoryAllocatorUsage&)
-#define OFF_GetFirstAllocator 0x15d904 // MemoryFramework::GetFirstAllocator(sEnumAllocator&, MemoryAllocatorUsage&)
+// Offsets in libgame.so v0.0.7833 (local symbols)
+#define OFF_GetNextAllocator  0x152478 // MemoryFramework::GetNextAllocator(sEnumAllocator&, MemoryAllocatorUsage&)
+#define OFF_GetFirstAllocator 0x1525e4 // MemoryFramework::GetFirstAllocator(sEnumAllocator&, MemoryAllocatorUsage&)
 
 // Layout read from GetNextAllocator's code
 typedef struct {
@@ -180,9 +180,9 @@ void ssx_log_heaps(void) {
 // Debug: what the UI pool really holds, block by block, from the allocator
 // itself (its usage counters are off): bytes in use, bytes free, and how
 // the free bytes are split. Holds the pool's lock while it walks.
-#define OFF_PPMalloc_Lock 0x136cdc   // PPMalloc_Base<Mutex>::Lock()
-#define OFF_PPMalloc_Unlock 0x136ccc // PPMalloc_Base<Mutex>::Unlock()
-#define OFF_ReportHeap 0x151118      // GeneralAllocator::ReportHeap(callback, context, block types, copy, buffer, size)
+#define OFF_PPMalloc_Lock 0x12b9b8   // PPMalloc_Base<Mutex>::Lock()
+#define OFF_PPMalloc_Unlock 0x12b9a8 // PPMalloc_Base<Mutex>::Unlock()
+#define OFF_ReportHeap 0x145df8      // GeneralAllocator::ReportHeap(callback, context, block types, copy, buffer, size)
 #define POOL_NAME "FE_SFGFX_GEN_A"
 
 // GeneralAllocator::BlockInfo

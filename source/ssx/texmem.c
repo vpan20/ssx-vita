@@ -36,16 +36,16 @@
 
 extern so_module so_mod;
 
-// Offsets in libgame.so v0.0.8430 (local symbols)
-#define OFF_TexturePlatC_Flush              0xdbb988 // RNA::TexturePlatC::Flush()
-#define OFF_TexturePlatC_CreateInternal     0xdbbc08 // RNA::TexturePlatC::CreateInternal(char*)
-#define OFF_TexturePlatC_Destroy            0xdc2960 // RNA::TexturePlatC::Destroy()
-#define OFF_TexturePlatC_GetTextureDataSize 0xdbb550 // RNA::TexturePlatC::GetTextureDataSize()
-#define OFF_SurfacePlatC_Lock               0xdbb230 // RNA::SurfacePlatC::Lock(unsigned&, unsigned)
-// CreateInternal finds its allocator through "ldr r3, [pc, #220]; add r3, pc":
-// the global block is at (0xdbbcb0 + 8) + the literal at 0xdbbd8c
-#define OFF_RenderGlobalsLiteral            0xdbbd8c
-#define OFF_RenderGlobalsBase               (0xdbbcb0 + 8)
+// Offsets in libgame.so v0.0.7833 (local symbols)
+#define OFF_TexturePlatC_Flush              0xd929e8 // RNA::TexturePlatC::Flush()
+#define OFF_TexturePlatC_CreateInternal     0xd92bcc // RNA::TexturePlatC::CreateInternal(char*)
+#define OFF_TexturePlatC_Destroy            0xd99908 // RNA::TexturePlatC::Destroy()
+#define OFF_TexturePlatC_GetTextureDataSize 0xd925b0 // RNA::TexturePlatC::GetTextureDataSize()
+#define OFF_SurfacePlatC_Lock               0xd92290 // RNA::SurfacePlatC::Lock(unsigned&, unsigned)
+// CreateInternal finds its allocator through "ldr r3, [pc, #228]; add r3, pc":
+// the global block is at (0xd92c54 + 8) + the literal at 0xd92d38 (= 0x17d0970 in v0.0.7833)
+#define OFF_RenderGlobalsLiteral            0xd92d38
+#define OFF_RenderGlobalsBase               (0xd92c54 + 8)
 
 // RNA::TexturePlatC fields, as used by the functions above
 #define TEX_GL_NAME(t)    (*(uint32_t *)((uint8_t *)(t) + 60))

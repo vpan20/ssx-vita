@@ -39,11 +39,11 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_OGLESProgram_Bind 0xd83bb0 // RNAX::OGLESProgram::Bind()
-#define OFF_ScopeC_FindParm 0xdb60cc   // RNA::ScopeC::FindParm(char const*, TypeID, char const*, unsigned) const
-#define OFF_AttributeNames 0x16fa440   // the 17 attribute names Bind looks up (relocated pointers)
-#define OFF_AttributeType 0x15d2898    // "OGLESRnaAttribute": block name and parameter type name
+// libgame.so v0.0.7833
+#define OFF_OGLESProgram_Bind 0xd5ac60 // RNAX::OGLESProgram::Bind()
+#define OFF_ScopeC_FindParm 0xd8d164   // RNA::ScopeC::FindParm(char const*, TypeID, char const*, unsigned) const
+#define OFF_AttributeNames 0x1671fa0   // the 17 attribute names Bind looks up (relocated pointers)
+#define OFF_AttributeType 0x154dfe8    // "OGLESRnaAttribute": block name and parameter type name
 #define NATTRIBUTES 17
 #define TYPE_ATTRIBUTE 4
 #define GLES_USE_PROGRAM 132 // EA::Graphics::OpenGLES20 vtable slot (byte offset 528)
@@ -77,8 +77,8 @@ static const char *attribute_type;
 volatile uint32_t ssx_shaderbind_attr_null; // attribute lookups that found nothing (debug report)
 #ifdef DEBUG_SOLOADER
 // The game's own steps, for the A/B test (perf.h)
-#define OFF_Stricmp 0x4c9860                    // EA::StdC::Stricmp(char const*, char const*)
-#define OFF_TexturePlatC_SetStateValue 0xdb83a4 // RNA::TexturePlatC::SetStateValue(SSStateE, int)
+#define OFF_Stricmp 0x4a1090                    // EA::StdC::Stricmp(char const*, char const*)
+#define OFF_TexturePlatC_SetStateValue 0xd8f400 // RNA::TexturePlatC::SetStateValue(SSStateE, int)
 static int (*Stricmp)(const char *, const char *);
 static void (*SetStateValue)(void *tex, int state, int value);
 #endif
@@ -175,8 +175,8 @@ static void Bind(void *prog) {
 // compares each one's type name with "OGLESRnaAttribute" (Stricmp) on the
 // way; here the cached is_attribute does. Same calls, same order otherwise.
 
-#define OFF_OGLESProgram_SendParmsToGPU 0xd8d45c // RNAX::OGLESProgram::SendParmsToGPU(bool)
-#define OFF_TexturePlatC_Bind 0xdbbbb8           // RNA::TexturePlatC::Bind()
+#define OFF_OGLESProgram_SendParmsToGPU 0xd644f8 // RNAX::OGLESProgram::SendParmsToGPU(bool)
+#define OFF_TexturePlatC_Bind 0xd92b7c           // RNA::TexturePlatC::Bind()
 // ScopeParmC: kind +28, element count +52
 #define PARM_KIND(q) (*(uint32_t *)((uint8_t *)(q) + 28))
 #define PARM_COUNT(q) (*(int32_t *)((uint8_t *)(q) + 52))

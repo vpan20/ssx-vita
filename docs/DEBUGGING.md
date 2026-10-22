@@ -75,7 +75,7 @@ game's symbol table (`nm -S` on `libgame.so`); any list of functions in that for
 
 ## Hooking the game
 
-The port patches `libgame.so` by offset, for v0.0.8430 only. `so_util` offers:
+The port patches `libgame.so` by offset, for v0.0.7833 only. `so_util` offers:
 
 - `hook_arm`: overwrites a function's start with a jump to ours;
 - `hook_arm_trampoline`: the same, keeping the original callable. It copies the first two

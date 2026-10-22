@@ -10,7 +10,7 @@ The port is a *so loader*, the approach of [gtasa_vita](https://github.com/TheOf
    [so_util](https://github.com/Rinnegatamante/so_util) and resolves their imports against
    `dynlib.c`: the Vita's newlib C library, [vitaGL](https://github.com/Rinnegatamante/vitaGL)
    for OpenGL ES 2, and wrappers where Android and the Vita differ.
-2. `patch.c` and `source/ssx/` hook the game by offset (for v0.0.8430 only) where it needs to
+2. `patch.c` and `source/ssx/` hook the game by offset (for v0.0.7833 only) where it needs to
    behave differently on the Vita.
 3. `source/ssx/lifecycle.c` plays the part of the APK's Java activity: it calls the game's JNI
    entry points in the order Android would. The Java classes the game calls back into are

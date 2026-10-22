@@ -34,7 +34,7 @@
 
 extern so_module so_mod;
 
-#define OFF_GetDisplayObjectByName 0xac30f8 // DisplayList::GetDisplayObjectByName(ASString const&, bool) const
+#define OFF_GetDisplayObjectByName 0xa9a178 // DisplayList::GetDisplayObjectByName(ASString const&, bool) const
 
 // DisplayList: entries (12 bytes, the object first) +0, count +4, last found +16
 #define DL_ENTRIES(dl) (*(uint8_t **)((uint8_t *)(dl) + 0))

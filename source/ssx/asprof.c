@@ -38,7 +38,7 @@ extern so_module so_mod;
 
 #if defined(DEBUG_SOLOADER) && SSX_ASPROF
 
-#define OFF_AsFunctionObject_Invoke 0x8ea39c // AS2::AsFunctionObject::Invoke(FnCall const&, LocalFrame*, char const*)
+#define OFF_AsFunctionObject_Invoke 0x8c195c // AS2::AsFunctionObject::Invoke(FnCall const&, LocalFrame*, char const*)
 #define FN_BUFFER(f) (*(uint8_t **)((uint8_t *)(f) + 60))
 #define FN_START(f) (*(uint32_t *)((uint8_t *)(f) + 76))
 #define FN_LEN(f) (*(uint32_t *)((uint8_t *)(f) + 80))
@@ -107,7 +107,7 @@ static uint64_t Invoke_hook(void *fn, void *call, void *frame, const char *name)
 
 // AvmSprite::GetMember, per member name: which reads of a clip's members
 // cost the time (the name is an ASStringNode, its text at +0)
-#define OFF_AvmSprite_GetMember 0x8c1c50 // AS2::AvmSprite::GetMember(Environment*, ASStringContext*, ASString const&, Value*)
+#define OFF_AvmSprite_GetMember 0x899210 // AS2::AvmSprite::GetMember(Environment*, ASStringContext*, ASString const&, Value*)
 #define NMEMBERS 256 // power of two
 typedef int (*GetMemberFn)(void *, void *, void *, void **, void *);
 static GetMemberFn GetMember_orig;

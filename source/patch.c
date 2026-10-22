@@ -114,7 +114,7 @@ int ret0(void);
 // ("package downloaded") is set too. MercuryManager::OnPackagesRetrieved would
 // queue them through flags this+4 (456), this+5 (457) and this+6 (453), which
 // MercuryManager::UpdateDatastore() then writes to the data store every frame.
-static int MercuryManager_Init(void *self, void *system, void *activity) {
+static __attribute__((unused)) int MercuryManager_Init(void *self, void *system, void *activity) {
 	uint8_t *mm = (uint8_t *)self;
 	mm[4] = 1; // FEDataStore 456: package info retrieved
 	mm[6] = 1; // FEDataStore 453: package already downloaded
@@ -192,7 +192,7 @@ static void OutOfMemory2(const MemoryFailure *f) {
 // JNI attach and AudioTrack.play() it does first take long enough to win that
 // race; with FalsoJNI they are instant, the thread exits at once and
 // Dac::Start() waits for it forever (black screen at boot).
-#define OFF_Dac_sDacActive 0x184c650
+#define OFF_Dac_sDacActive 0x17be330
 static so_hook submit_thread_hook;
 static int Dac_SubmitSamplesThreadFunc(void *dac) {
 	volatile uint8_t *dac_active = (volatile uint8_t *)(so_mod.text_base + OFF_Dac_sDacActive);
@@ -242,25 +242,27 @@ void so_patch(void) {
 #endif
 
 	// These are local symbols of libgame.so (.symtab only, not exported), so
-	// they are hooked by offset. All offsets are for ssx-v0_0_8430.apk.
+	// they are hooked by offset. All offsets are for ssx-v0_0_7833.apk (K's copy; resolved from libgame.so's symbol table).
 
 	// MERCURY::MercuryManager::Init(EA::Blast::ISystem*, _jobject*)
 	// Would start EA's DLC downloader (servers long gone); the APK already
 	// contains all the content. Report the "SSX" package as downloaded instead.
-	hook_addr(so_mod.text_base + 0x16c5b0, (uintptr_t)&MercuryManager_Init);
+	// 7833: MERCURY is not linked into libgame.so (it ships as a separate libmercury.so the game never
+	// dlopen()s here), so there is nothing to hook.
+	// hook_addr(so_mod.text_base + 0x16c5b0, (uintptr_t)&MercuryManager_Init);
 
 	// EA::IO::File::Copy(char const*, char const*, bool)
-	file_copy_hook = hook_addr(so_mod.text_base + 0x11dd24, (uintptr_t)&File_Copy);
+	file_copy_hook = hook_addr(so_mod.text_base + 0x1129bc, (uintptr_t)&File_Copy);
 
 	// GameRender::PlatInit()
-	gamerender_platinit_hook = hook_addr(so_mod.text_base + 0xdd7504, (uintptr_t)&GameRender_PlatInit);
+	gamerender_platinit_hook = hook_addr(so_mod.text_base + 0xdae06c, (uintptr_t)&GameRender_PlatInit);
 
 	// MemoryFramework::ErrorHandlers::OutOfMemory (and its .constprop clone)
-	oom_hook = hook_addr(so_mod.text_base + 0x15a978, (uintptr_t)&OutOfMemory);
-	oom_hook2 = hook_addr(so_mod.text_base + 0x156ba8, (uintptr_t)&OutOfMemory2);
+	oom_hook = hook_addr(so_mod.text_base + 0x14f658, (uintptr_t)&OutOfMemory);
+	oom_hook2 = hook_addr(so_mod.text_base + 0x14b888, (uintptr_t)&OutOfMemory2);
 
 	// EA::Audio::Core::Dac::SubmitSamplesThreadFunc(void*)
-	submit_thread_hook = hook_addr(so_mod.text_base + 0x518dbc, (uintptr_t)&Dac_SubmitSamplesThreadFunc);
+	submit_thread_hook = hook_addr(so_mod.text_base + 0x4f05ec, (uintptr_t)&Dac_SubmitSamplesThreadFunc);
 
 	ssx_trace_patch(); // debug builds: boot and UI flow lines
 }

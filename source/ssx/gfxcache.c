@@ -61,13 +61,13 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430, UX::GFxHeap
-#define OFF_Alloc 0x6e1608         // Alloc(unsigned size, unsigned align, Scaleform::AllocInfo const*)
-#define OFF_Free 0x6e1888          // Free(void*)
-#define OFF_Realloc 0x6e18b4       // Realloc(void*, unsigned)
-#define OFF_GetUsableSize 0x6e14cc // GetUsableSize(void const*): "subs r0, r1, #0; bxeq lr; b 0x6e146c"
-#define OFF_UsableSizeOf 0x6e146c  // its tail, usable size of the block at r0
-#define OFF_Dtor 0x6e1234          // ~GFxHeap(): heaps don't seem to die, but if one does
+// libgame.so v0.0.7833, UX::GFxHeap
+#define OFF_Alloc 0x6b8bc8         // Alloc(unsigned size, unsigned align, Scaleform::AllocInfo const*)
+#define OFF_Free 0x6b8e48          // Free(void*)
+#define OFF_Realloc 0x6b8e74       // Realloc(void*, unsigned)
+#define OFF_GetUsableSize 0x6b8a8c // GetUsableSize(void const*): "subs r0, r1, #0; bxeq lr; b 0x6b8a2c"
+#define OFF_UsableSizeOf 0x6b8a2c  // its tail, usable size of the block at r0
+#define OFF_Dtor 0x6b87f4          // ~GFxHeap(): heaps don't seem to die, but if one does
 
 #define MAX_SMALL 1024 // covers the 520-byte AS2 stack page every sprite allocates (AvmSprite -> Environment)
 #define CLASSES (MAX_SMALL / 16 + 1)

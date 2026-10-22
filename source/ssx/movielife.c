@@ -32,13 +32,13 @@ extern so_module so_mod;
 
 #ifdef DEBUG_SOLOADER
 
-// libgame.so v0.0.8430, Scaleform::GFx
-#define OFF_MovieDataDef_ctor 0x841014 // MovieDataDef(ResourceKey const&, MovieDataType, char const*, MemoryHeap*, bool, unsigned)
-#define OFF_MovieDataDef_dtor 0x83626c // ~MovieDataDef() (D1)
-#define OFF_MovieDefImpl_ctor 0x83aac0 // MovieDefImpl(MovieDataDef*, MovieDefBindStates*, LoaderImpl*, unsigned, StateBagImpl*, MemoryHeap*, bool, unsigned)
-#define OFF_MovieDefImpl_dtor 0x83adac // ~MovieDefImpl() (D1)
-#define OFF_MovieImpl_ctor 0x8461e0    // MovieImpl(MemoryHeap*)
-#define OFF_MovieImpl_dtor 0x8548c0    // ~MovieImpl() (D1)
+// libgame.so v0.0.7833, Scaleform::GFx
+#define OFF_MovieDataDef_ctor 0x8185d4 // MovieDataDef(ResourceKey const&, MovieDataType, char const*, MemoryHeap*, bool, unsigned)
+#define OFF_MovieDataDef_dtor 0x80d82c // ~MovieDataDef() (D1)
+#define OFF_MovieDefImpl_ctor 0x812080 // MovieDefImpl(MovieDataDef*, MovieDefBindStates*, LoaderImpl*, unsigned, StateBagImpl*, MemoryHeap*, bool, unsigned)
+#define OFF_MovieDefImpl_dtor 0x81236c // ~MovieDefImpl() (D1)
+#define OFF_MovieImpl_ctor 0x81d7a0    // MovieImpl(MemoryHeap*)
+#define OFF_MovieImpl_dtor 0x82be80    // ~MovieImpl() (D1)
 
 #define MAX_DEFS 1024
 #define NAME_LEN 48

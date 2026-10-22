@@ -719,7 +719,7 @@ static void hitch_check(uint64_t now, uint64_t dt, uint32_t swap_us) {
 // render frame (the render thread keeps presenting the same picture).
 
 #define SIM_HITCH_US 150000
-#define OFF_GameLoopProcess 0x10598fc // GameLoop::GameLoopProcess(float)
+#define OFF_GameLoopProcess 0x1030464 // GameLoop::GameLoopProcess(float)
 // Debug aid, 0 = off: crash for a core dump when a logic frame after a race
 // runs longer than this
 #define SIM_DUMP_US 0

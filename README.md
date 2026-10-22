@@ -1,6 +1,11 @@
-# SSX (2012) for PS Vita
+# SSX (2012) for PS Vita - APK 0.0.7833 edition
 
-An unofficial port of EA's **SSX** (the 2012 Android version, `ssx-v0_0_8430.apk`) to the PS Vita.
+This is [lukebrl/ssx-vita](https://github.com/lukebrl/ssx-vita) (MIT) adapted to the earlier Android build
+0.0.7833: every game offset was re-resolved against that libgame.so (see `docs/PORT-7833.md`). All the
+port work is lukebrl's; the 7833 adaptation is this fork's. If you have the 0.0.8430 APK, use the original.
+
+
+An unofficial port of EA's **SSX** (the 2012 Android version, `ssx-v0_0_7833.apk`) to the PS Vita.
 
 The game's own ARM code runs unmodified on the Vita through a *so loader*: this project
 provides everything Android would provide around it (the C library, OpenGL ES through
@@ -25,7 +30,7 @@ the data the port needs.
   `ur0:tai/` and add it under `*KERNEL` in `ur0:tai/config.txt`, then reboot.
 - `libshacccg.suprx` (the runtime shader compiler), extracted with
   [ShaRKBR33D](https://github.com/Rinnegatamante/ShaRKBR33D) into `ur0:data/`.
-- **The SSX APK, version 0.0.8430**, from your own copy of the game. The data tool checks it.
+- **The SSX APK, version 0.0.7833**, from your own copy of the game. The data tool checks it.
 - About **2 GB** free on `ux0:`.
 - A PC (Windows, Linux or macOS) to run the data tool.
 - **Highly recommended:** [CapUnlocker](https://github.com/GrapheneCt/CapUnlocker/releases)

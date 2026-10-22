@@ -27,10 +27,10 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430, in Audio::PathStream::Load()
-#define OFF_UseStream 0x62805c // ldr r3, [r0]; mov r5, r0 (r0 = PATH_createstreamimp(...))
-#define OFF_Continue  0x628064
-#define OFF_Return    0x6280a0 // pop {r3, r4, r5, pc}, as when the asset is missing
+// libgame.so v0.0.7833, in Audio::PathStream::Load() (0x5ff7f0)
+#define OFF_UseStream 0x5ff834 // ldr r3, [r0]; mov r5, r0 (r0 = PATH_createstreamimp(...))
+#define OFF_Continue  0x5ff83c
+#define OFF_Return    0x5ff878 // pop {r3, r4, r5, pc}, as when the asset is missing
 
 uintptr_t ssx_audioguard_continue, ssx_audioguard_return;
 volatile uint32_t ssx_audioguard_hits;

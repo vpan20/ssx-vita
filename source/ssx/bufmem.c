@@ -48,7 +48,7 @@ extern so_module so_mod;
 
 #define GL_STATIC_DRAW_ 0x88E4
 
-// Per class: functions and fields, in libgame.so v0.0.8430
+// Per class: functions and fields, in libgame.so v0.0.7833
 typedef struct {
     const char *name;
     uint32_t lock, unlock;        // Lock(unsigned), Unlock()
@@ -61,10 +61,10 @@ typedef struct {
 } buf_class;
 
 static const buf_class classes[] = {
-    // RNA::StreamPlatC: Destroy() at 0xdc1ee8 frees +52 with globals+124
-    { "vertex", 0xdacb38, 0xdba9cc, 0xdc1284, 0xdc1ee8, 0xdc1f34, 0xdc1fcc, 124, 40, 44, 48, 52, 56, 36 },
-    // RNA::IndicesC: Destroy() at 0xdc272c frees +40 with globals+128
-    { "index", 0xdb869c, 0xdb86a4, 0xdc14d0, 0xdc272c, 0xdc2778, 0xdc2810, 128, 28, 32, 36, 40, 44, 24 },
+    // RNA::StreamPlatC: Destroy() at 0xd98e90 frees +52 with globals+124
+    { "vertex", 0xd83bd0, 0xd91a2c, 0xd9822c, 0xd98e90, 0xd98edc, 0xd98f74, 124, 40, 44, 48, 52, 56, 36 },
+    // RNA::IndicesC: Destroy() at 0xd996d4 frees +40 with globals+128
+    { "index", 0xd8f6f8, 0xd8f700, 0xd98478, 0xd996d4, 0xd99720, 0xd997b8, 128, 28, 32, 36, 40, 44, 24 },
 };
 #define NCLASSES (sizeof(classes) / sizeof(classes[0]))
 
@@ -73,12 +73,12 @@ static const buf_class classes[] = {
 // filled once. Character meshes (GeomData, skinning) keep theirs: freeing
 // them left the player model as a mess of stretched triangles.
 static const uint32_t allowed_callers[] = {
-    0xd6cc94, // RNAX::RNASceneC::SerializeInStream
-    0xfe0aa0, // StaticInstancesRenderObj::BakeRNAMeshToGPU
-    0xfec758, 0xfec794, 0xfed0bc, // WorldResourceAllocator::CreateGameObject (terrain)
-    0xd6c81c, // RNAX::RNASceneC::SerializeInIndices
-    0xfe0ac0, // StaticInstancesRenderObj::BakeRNAMeshToGPU
-    0xfec82c, 0xfec948, 0xfeca60, 0xfed1e4, // WorldResourceAllocator::CreateGameObject (terrain)
+    0xd43d44, // RNAX::RNASceneC::SerializeInStream
+    0xfb7608, // StaticInstancesRenderObj::BakeRNAMeshToGPU
+    0xfc32c0, 0xfc32fc, 0xfc3c24, // WorldResourceAllocator::CreateGameObject (terrain)
+    0xd438cc, // RNAX::RNASceneC::SerializeInIndices
+    0xfb7628, // StaticInstancesRenderObj::BakeRNAMeshToGPU
+    0xfc3394, 0xfc34b0, 0xfc35c8, 0xfc3d4c, // WorldResourceAllocator::CreateGameObject (terrain)
 };
 
 #define NSITES (sizeof(allowed_callers) / sizeof(allowed_callers[0]))

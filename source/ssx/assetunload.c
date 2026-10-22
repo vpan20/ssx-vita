@@ -49,15 +49,15 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_ReleaseAssetClass 0xf91da4 // CramFileCache::ReleaseAssetClass(Attrib::Key<1> const&)
-#define OFF_RangeCache_Unload 0x2c6a34 // GlobeUiRangeCache::Unload()
-#define OFF_RBTreeIncrement 0x4b0cec   // eastl::RBTreeIncrement(rbtree_node_base const*)
-#define OFF_AcquireThread 0xdd766c     // GameRender::AcquireThread()
-#define OFF_ReleaseThread 0xdd7778     // GameRender::ReleaseThread()
-#define OFF_FutexLock 0x70d7e0         // EA::Thread::Futex::Lock() (recursive)
-#define OFF_FutexUnlock 0x1453b4       // EA::Thread::Futex::Unlock()
-#define OFF_GameRender_ptr 0x1778bd8   // GOT entry of the GameRender* FileRef::Unload locks
+// libgame.so v0.0.7833
+#define OFF_ReleaseAssetClass 0xf688fc // CramFileCache::ReleaseAssetClass(Attrib::Key<1> const&)
+#define OFF_RangeCache_Unload 0x2b5564 // GlobeUiRangeCache::Unload()
+#define OFF_RBTreeIncrement 0x48851c   // eastl::RBTreeIncrement(rbtree_node_base const*)
+#define OFF_AcquireThread 0xdae1d4     // GameRender::AcquireThread()
+#define OFF_ReleaseThread 0xdae2e0     // GameRender::ReleaseThread()
+#define OFF_FutexLock 0x6e4da0         // EA::Thread::Futex::Lock() (recursive)
+#define OFF_FutexUnlock 0x13a094       // EA::Thread::Futex::Unlock()
+#define OFF_GameRender_ptr 0x17be81c   // GOT entry of the GameRender* FileRef::Unload locks
 
 // CramFileCache: its futex at +20, a vector of AssetFileCache (36 bytes) at
 // +4..+8. AssetFileCache: the class key at +4, its FileRefs at +12..+16,
@@ -117,7 +117,7 @@ static void RangeCache_Unload_hook(void *range) {
 }
 
 #ifdef DEBUG_SOLOADER
-#define OFF_GetThreadId 0x4a9118 // EA::Thread::GetThreadId()
+#define OFF_GetThreadId 0x480948 // EA::Thread::GetThreadId()
 #define REPORT_MS 5000
 #define CALLERS 8
 #define PORT_CALLER 0xFFFFFFFF

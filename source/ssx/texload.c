@@ -35,14 +35,14 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_TranslateDds 0x5ba300     // EA::CoreRender::TranslateDds(TexturePlatC*, Stream&, ICoreAllocator*, DeviceC*, char const*)
-#define OFF_TranslatePvr 0x5ba3e8     // EA::CoreRender::TranslatePvr(same)
-#define OFF_LoadTextureFromDDS 0xd860c0 // RNAX::LoadTextureFromDDS(DeviceC*, TextureC*, void*, unsigned, char const*, ...)
-#define OFF_LoadTextureFromPVR 0xd861e0 // RNAX::LoadTextureFromPVR(DeviceC*, TextureC*, void*, unsigned, char const*)
-#define OFF_AcquireThread 0xdd766c    // GameRender::AcquireThread()
-#define OFF_ReleaseThread 0xdd7778    // GameRender::ReleaseThread()
-#define OFF_GameRender_ptr 0x1778bd8  // GOT entry of the GameRender* the translator locks
+// libgame.so v0.0.7833
+#define OFF_TranslateDds 0x591b48     // EA::CoreRender::TranslateDds(TexturePlatC*, Stream&, ICoreAllocator*, DeviceC*, char const*)
+#define OFF_TranslatePvr 0x591c2c     // EA::CoreRender::TranslatePvr(same)
+#define OFF_LoadTextureFromDDS 0xd5d170 // RNAX::LoadTextureFromDDS(DeviceC*, TextureC*, void*, unsigned, char const*, ...)
+#define OFF_LoadTextureFromPVR 0xd5d284 // RNAX::LoadTextureFromPVR(DeviceC*, TextureC*, void*, unsigned, char const*)
+#define OFF_AcquireThread 0xdae1d4    // GameRender::AcquireThread()
+#define OFF_ReleaseThread 0xdae2e0    // GameRender::ReleaseThread()
+#define OFF_GameRender_ptr 0x17be81c  // GOT entry of the GameRender* the translator locks
 
 #define VT(o) (*(void ***)(o))
 #define UPLOAD_SLOW_US 8000 // debug: uploads logged from this long

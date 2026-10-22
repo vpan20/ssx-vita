@@ -37,9 +37,9 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430, in GlobeUiRangeCache::Process(float)
-#define OFF_PendingCmp 0x2c7990   // cmp r0, #1: AssetStream::GetNumberAssetsPending(0) > 1 waits
-#define OFF_DelayLiteral 0x2c79e8 // 0.15f: seconds with at most one pending before the next load
+// libgame.so v0.0.7833, in GlobeUiRangeCache::Process(float)
+#define OFF_PendingCmp 0x2b64c0   // cmp r0, #1: AssetStream::GetNumberAssetsPending(0) > 1 waits
+#define OFF_DelayLiteral 0x2b6518 // 0.15f: seconds with at most one pending before the next load
 #define CMP_R0_1 0xe3500001
 #define CMP_R0_MAX 0xe3500003     // cmp r0, #3: waits only above 3 pending (up to 4 in flight)
 #define DELAY_015 0x3e19999a
@@ -57,8 +57,8 @@ static int patch_word(uint32_t off, uint32_t expected, uint32_t value) {
 }
 
 #ifdef DEBUG_SOLOADER
-#define OFF_RangeCache_Process 0x2c7920  // GlobeUiRangeCache::Process(float)
-#define OFF_RangeCache_IsActive 0x2c6744 // GlobeUiRangeCache::IsActive() const: assets still to load
+#define OFF_RangeCache_Process 0x2b6450  // GlobeUiRangeCache::Process(float)
+#define OFF_RangeCache_IsActive 0x2b5274 // GlobeUiRangeCache::IsActive() const: assets still to load
 
 static void (*Process_orig)(void *, float);
 static int (*IsActive)(void *);
@@ -66,7 +66,7 @@ static int (*IsActive)(void *);
 // Models: GeometryAsset::TranslateHelper parses each one and makes its
 // buffers under the GPU lock (GeomData::LoadFromStream), the render thread
 // waiting meanwhile
-#define OFF_GeomData_LoadFromStream 0x5b8d20 // EA::CoreRender::GeomData::LoadFromStream(InStreamC&, DeviceC*, bool)
+#define OFF_GeomData_LoadFromStream 0x590568 // EA::CoreRender::GeomData::LoadFromStream(InStreamC&, DeviceC*, bool)
 #define UPLOAD_SLOW_US 8000
 static int (*LoadFromStream_orig)(void *, void *, void *, int);
 
@@ -83,9 +83,9 @@ static int LoadFromStream_hook(void *geom, void *stream, void *device, int flag)
 // returns early, before the transition and the camera (GlobeController::
 // Process), while its flag at +344 is set and ProcessAssetsLoad says the
 // entity assets are not all loaded: the globe is held still.
-#define OFF_EntityMgr_Process 0x2b1ee0       // GlobeUiEntityManager::Process(float)
-#define OFF_EntityMgr_AssetsLoad 0x2b0948    // GlobeUiEntityManager::ProcessAssetsLoad(): 0 while loading
-#define OFF_EntityMgr_IsTransitioning 0x2b1ea8
+#define OFF_EntityMgr_Process 0x2a0bf0       // GlobeUiEntityManager::Process(float)
+#define OFF_EntityMgr_AssetsLoad 0x29f658    // GlobeUiEntityManager::ProcessAssetsLoad(): 0 while loading
+#define OFF_EntityMgr_IsTransitioning 0x2a0bb8
 #define ENTITY_LOADING_FLAG(m) (*(volatile uint8_t *)((uint8_t *)(m) + 344))
 #define ENTITY_CONTROLLER(m) (*(uint8_t **)((uint8_t *)(m) + 248))
 #define CONTROLLER_CAMERA(c) (*(uint8_t **)((c) + 20))
@@ -164,7 +164,7 @@ void ssx_globeload_patch(void) {
     if (!Process_orig)
         l_error("[GLOBE] could not hook GlobeUiRangeCache::Process");
     EntityIsTransitioning = (void *)(so_mod.text_base + OFF_EntityMgr_IsTransitioning);
-    PendingAssets = (void *)(so_mod.text_base + 0x665ec8); // AssetStream::GetNumberAssetsPending(unsigned)
+    PendingAssets = (void *)(so_mod.text_base + 0x63d488); // AssetStream::GetNumberAssetsPending(unsigned)
     AssetsLoad_orig = (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + OFF_EntityMgr_AssetsLoad, (uintptr_t)AssetsLoad_hook);
     EntityProcess_orig =
         (void *)hook_arm_trampoline(&so_mod, so_mod.text_base + OFF_EntityMgr_Process, (uintptr_t)EntityProcess_hook);

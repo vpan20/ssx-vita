@@ -36,10 +36,10 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_ProcessFEPostRaceProgression 0x363688 // GameFlowDataManager::ProcessFEPostRaceProgression(float)
-#define OFF_WaitFlagBranch 0x363a64               // type 1: beq (flag 200 not set: keep waiting)
-#define BEQ_WAIT 0x0a000035                       // beq 0x363b40
+// libgame.so v0.0.7833
+#define OFF_ProcessFEPostRaceProgression 0x3501ec // GameFlowDataManager::ProcessFEPostRaceProgression(float)
+#define OFF_WaitFlagBranch 0x3505d0               // type 1: beq (flag 197 in this build not set: keep waiting)
+#define BEQ_WAIT 0x0a00003c                       // beq 0x3506c8
 #define ARM_NOP 0xe320f000
 // GameFlowDataManager: actions at +(i + 1835) * 16 (type +0, value +4,
 // remaining time +8), the current one's index at +0x74b4, the count at +0x74b0

@@ -55,16 +55,16 @@ extern so_module so_mod;
 #define SSX_HW_SKINNING 1
 #endif
 
-// libgame.so v0.0.8430, in CharacterRenderObj::Init(IUnknown32*, BaseRenderObjInit*)
-#define OFF_AllocSize      0xfca5f0 // mov r1, #52: sizeof(CpuSkinningFeatureImpl)
-#define OFF_InlineCtor     0xfca600 // CpuSkinningFeatureImpl's constructor, inlined (to 0xfca648)
-#define OFF_StoreFeature   0xfca648 // str r7, [r5, #188]: the feature, then its Init()
-#define OFF_GpuFeatureCtor 0xfd32c4 // GpuSkinningFeatureImpl::GpuSkinningFeatureImpl(bool, bool, int)
+// libgame.so v0.0.7833, in CharacterRenderObj::Init(IUnknown32*, BaseRenderObjInit*)
+#define OFF_AllocSize      0xfa1158 // mov r1, #52: sizeof(CpuSkinningFeatureImpl)
+#define OFF_InlineCtor     0xfa1168 // CpuSkinningFeatureImpl's constructor, inlined (to 0xfa11b0)
+#define OFF_StoreFeature   0xfa11b0 // str r7, [r5, #188]: the feature, then its Init()
+#define OFF_GpuFeatureCtor 0xfa9e2c // GpuSkinningFeatureImpl::GpuSkinningFeatureImpl(bool, bool, int)
 #define GPU_FEATURE_SIZE   56       // what GameObjectRenderObj::InitSkinning allocates for it
-#define OFF_GpuFeatureVtbl 0x175d440 // _ZTV22GpuSkinningFeatureImpl (vptr = +8)
-#define OFF_DispatchMeshes 0xfcab48  // CharacterRenderObj::DispatchMeshes(IUnknown32*, RenderPass)
-#define OFF_DispatchBoard  0xfcae84  // CharacterRenderObj::DispatchBoardMeshForCascadeShadows(IUnknown32*, int)
-#define OFF_RenderImmediate 0x5cfec8 // MeshRenderObject::RenderImmediate(IUnknown32*, CachedMeshData&, bool)
+#define OFF_GpuFeatureVtbl 0x16d24b0 // _ZTV22GpuSkinningFeatureImpl (vptr = +8)
+#define OFF_DispatchMeshes 0xfa16b0  // CharacterRenderObj::DispatchMeshes(IUnknown32*, RenderPass)
+#define OFF_DispatchBoard  0xfa19ec  // CharacterRenderObj::DispatchBoardMeshForCascadeShadows(IUnknown32*, int)
+#define OFF_RenderImmediate 0x5a7708 // MeshRenderObject::RenderImmediate(IUnknown32*, CachedMeshData&, bool)
 // CharacterRenderObj / MeshRenderObject fields
 #define CHAR_FEATURE(o)  (*(void ***)((uint8_t *)(o) + 188)) // ISkinningFeature*
 #define MESH_DATA(o)     (*(uint8_t **)((uint8_t *)(o) + 36)) // CachedMeshData array
@@ -73,17 +73,17 @@ extern so_module so_mod;
 #define VT_LOCK   28 // GpuLockSkinningRegisters(IUnknown32*)
 #define VT_UPDATE 32 // GpuUpdateSkinningRegisters(IUnknown32*, int mesh)
 #define VT_UNLOCK 36 // GpuUnlockSkinningRegisters()
-#define OFF_CacheMeshData  0xfcb0ac // CharacterRenderObj::CacheMeshData(IUnknown32*)
-#define OFF_FindTechnique  0xdb1f34 // RNA::ShaderC::FindTechniqueByName(char const*) const
+#define OFF_CacheMeshData  0xfa1c14 // CharacterRenderObj::CacheMeshData(IUnknown32*)
+#define OFF_FindTechnique  0xd88fcc // RNA::ShaderC::FindTechniqueByName(char const*) const
 #define FEATURE_SKIN_DATA(f) (*(uint8_t **)((uint8_t *)(f) + 16)) // vector<GpuSkinningData> begin
 #define SKIN_DATA_SIZE     28
 #define SKIN_DATA_BONES(d) (*(int32_t *)((uint8_t *)(d) + 24)) // bones per vertex: _GpuSkinned%d
 #define LOOKUPS_PER_MESH   6
 // Diagnostics
-#define OFF_InjectGPUStreams 0xfd588c // GpuSkinningFeatureImpl::CacheMeshDataInjectGPUStreams(IUnknown32*, vector<MeshSkeletonMapping> const*, vector<CachedMeshData>&)
-#define OFF_MeshAddStream    0xdb1344 // RNA::MeshC::AddStream(StreamC*)
-#define OFF_MeshSetFormat    0xdb18ec // RNA::MeshC::SetVertexFormat(VertexFormatC*)
-#define OFF_SetJointPalette  0x1019820 // GameSkinning::SetJointPaletteData(Vector4 const*, int)
+#define OFF_InjectGPUStreams 0xfac3f4 // GpuSkinningFeatureImpl::CacheMeshDataInjectGPUStreams(IUnknown32*, vector<MeshSkeletonMapping> const*, vector<CachedMeshData>&)
+#define OFF_MeshAddStream    0xd883dc // RNA::MeshC::AddStream(StreamC*)
+#define OFF_MeshSetFormat    0xd88984 // RNA::MeshC::SetVertexFormat(VertexFormatC*)
+#define OFF_SetJointPalette  0xff0388 // GameSkinning::SetJointPaletteData(Vector4 const*, int)
 
 static void *(*gpu_ctor)(void *self, int merge_skeletons, int use_cpu_mem, int force_vert_num);
 static int created;

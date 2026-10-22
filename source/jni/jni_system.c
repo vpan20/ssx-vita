@@ -120,8 +120,8 @@ jint StorageDirectory_GetPrimaryExternalStorageState(jmethodID id, va_list args)
 
 jobject System_GetPlatformVersion(jmethodID id, va_list args) { return jstr("4.1.2"); }
 jobject System_GetApiLevel(jmethodID id, va_list args) { return jstr("16"); }
-jobject System_GetApplicationVersion(jmethodID id, va_list args) { return jstr("0.0.8430"); }
-jint System_GetApplicationVersionCode(jmethodID id, va_list args) { return 8430; }
+jobject System_GetApplicationVersion(jmethodID id, va_list args) { return jstr("0.0.7833"); }
+jint System_GetApplicationVersionCode(jmethodID id, va_list args) { return 7833; }
 jobject System_GetDeviceName(jmethodID id, va_list args) { return jstr("PS Vita"); }
 jobject System_GetDeviceUniqueId(jmethodID id, va_list args) { return jstr("0123456789abcdef"); }
 jobject System_GetDeviceModel(jmethodID id, va_list args) { return jstr("PS Vita"); }

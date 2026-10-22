@@ -48,9 +48,9 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_ScopeC_FindParm 0xdb60cc // RNA::ScopeC::FindParm(char const*, TypeID, char const*, unsigned) const
-#define OFF_ScopeC_FindBlockByName 0xdb5ff8 // RNA::ScopeC::FindBlockByName(char const*) const
+// libgame.so v0.0.7833
+#define OFF_ScopeC_FindParm 0xd8d164 // RNA::ScopeC::FindParm(char const*, TypeID, char const*, unsigned) const
+#define OFF_ScopeC_FindBlockByName 0xd8d090 // RNA::ScopeC::FindBlockByName(char const*) const
 // ScopeParmC fields FindParm compares
 #define PARM_TYPE(p)  (*(uint32_t *)((uint8_t *)(p) + 28))
 #define PARM_NAME(p)  (*(const char **)((uint8_t *)(p) + 40))
@@ -87,15 +87,15 @@ static const struct {
     uint32_t addr;
     const char *name;
 } mutators[] = {
-    { 0xdbdba8, "ScopeC::ScopeC" },
-    { 0xdc0638, "ScopeC::~ScopeC" },
-    { 0xdb5d64, "ScopeC::AddBlock" },
-    { 0xdb6b38, "ScopeC::AddParm" },
-    { 0xdb7764, "ScopeC::DeleteUnusedParms" },
-    { 0xdb56fc, "ScopeBlockC::ScopeBlockC" },
-    { 0xdb5c4c, "ScopeBlockC::AddParm" },
-    { 0xdb57fc, "ScopeBlockC::DeleteAllParms" },
-    { 0xdb5a78, "ScopeBlockC::DeleteUnusedParms" },
+    { 0xd94b54, "ScopeC::ScopeC" },
+    { 0xd975e0, "ScopeC::~ScopeC" },
+    { 0xd8cdfc, "ScopeC::AddBlock" },
+    { 0xd8dbd0, "ScopeC::AddParm" },
+    { 0xd8e7fc, "ScopeC::DeleteUnusedParms" },
+    { 0xd8c794, "ScopeBlockC::ScopeBlockC" },
+    { 0xd8cce4, "ScopeBlockC::AddParm" },
+    { 0xd8c894, "ScopeBlockC::DeleteAllParms" },
+    { 0xd8cb10, "ScopeBlockC::DeleteUnusedParms" },
 };
 #define NMUTATORS (sizeof(mutators) / sizeof(mutators[0]))
 

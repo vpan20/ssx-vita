@@ -35,7 +35,7 @@
 
 extern so_module so_mod;
 
-#define OFF_File_Copy 0x11dac4 // EA::IO::File::Copy(char const*, char const*, bool) [.part.125]: (src, dst)
+#define OFF_File_Copy 0x1129bc // EA::IO::File::Copy(char const*, char const*, bool) [.part.125]: (src, dst)
 #define CHUNK (32 * 1024)
 
 typedef int (*CopyFn)(const char *, const char *);

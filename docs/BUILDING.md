@@ -34,7 +34,7 @@ Python 3.10 or later:
 cd datatool
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests        # tests on synthetic data, no game needed
-python ssx_datatool.py path/to/ssx-v0_0_8430.apk out/
+python ssx_datatool.py path/to/ssx-v0_0_7833.apk out/
 ```
 
 The movies need ffmpeg: the `SSX_FFMPEG` environment variable, the imageio-ffmpeg package
@@ -56,7 +56,7 @@ pyinstaller --onefile --windowed --name ssx-datatool --icon ssxdata/icon.png \
 |---|---|
 | `source/main.c` | Entry point: loads `libgame.so`, patches it, starts the game |
 | `source/dynlib.c` | Import table: every libc/GL symbol the game imports, mapped to newlib, vitaGL or a wrapper |
-| `source/patch.c` | Installs the hooks into `libgame.so` (offsets are for v0.0.8430) |
+| `source/patch.c` | Installs the hooks into `libgame.so` (offsets are for v0.0.7833) |
 | `source/ssx/` | One file per fix or feature: what it fixes and why is at the top of each file |
 | `source/reimpl/` | Android/Bionic pieces rewritten for the Vita: pthreads, file I/O, assets, sparse saves |
 | `source/jni/` | The APK's Java classes, rewritten in C (EGL, audio, assets, video, device info) |

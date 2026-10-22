@@ -42,11 +42,11 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_TerrainRenderObj_Render 0xffbd38 // TerrainRenderObj::Render(IUnknown32*, unsigned, double)
-#define OFF_SortObjectsForDispatch 0xffb7c0  // TerrainRenderObj::SortObjectsForDispatch(int, unsigned)
-#define OFF_SelectLOD 0xff5a58               // TerrainGameObject::SelectLOD(float) const
-#define OFF_HandleMap_Index 0xff968c         // eastl::map<TerrainGameObject const*, Bvm2::BvmHandle>::operator[]
+// libgame.so v0.0.7833
+#define OFF_TerrainRenderObj_Render 0xfd28a0 // TerrainRenderObj::Render(IUnknown32*, unsigned, double)
+#define OFF_SortObjectsForDispatch 0xfd2328  // TerrainRenderObj::SortObjectsForDispatch(int, unsigned)
+#define OFF_SelectLOD 0xfcc5c0               // TerrainGameObject::SelectLOD(float) const
+#define OFF_HandleMap_Index 0xfd01f4         // eastl::map<TerrainGameObject const*, Bvm2::BvmHandle>::operator[]
 
 // TerrainRenderObj: collected chunks (SortableChunk, 24 bytes, object entry
 // at +16) +40..+44, terrain object entries (256 bytes, object first) +80..+84,
@@ -130,11 +130,11 @@ static struct {
 // chunks past it are drawn and clipped whole by the GPU. An EA Frustum built
 // from the device's view and projection: far plane (normal, d) at +16, eye
 // at +368. Chunk boxes (center, half size) at bvm+7036, 32 bytes a handle.
-#define OFF_Frustum_ctor 0x5c29f0
-#define OFF_Frustum_dtor 0x5bfd28
-#define OFF_Frustum_SetViewProj 0x5c5088
-#define OFF_Device_GetView 0xdafd20
-#define OFF_Device_GetProjection 0xdafc94
+#define OFF_Frustum_ctor 0x59a230 // EA::CoreRender::Frustum::Frustum()
+#define OFF_Frustum_dtor 0x597568 // EA::CoreRender::Frustum::~Frustum() (D1)
+#define OFF_Frustum_SetViewProj 0x59c8c8
+#define OFF_Device_GetView 0xd86db8
+#define OFF_Device_GetProjection 0xd86d2c
 #define IID_DeviceC 0x092398ad
 #define BVM_BOXES(b) (*(float **)((b) + 7036))
 

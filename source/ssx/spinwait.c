@@ -36,18 +36,18 @@
 
 extern so_module so_mod;
 
-// Backward branches of the busy-wait loops in libgame.so v0.0.8430
+// Backward branches of the busy-wait loops in libgame.so v0.0.7833
 static const struct {
     uint32_t branch;
     const char *where;
 } spin_loops[] = {
-    { 0x562774, "EA::Audio::Core::BufferReference::ClearPending" },
-    { 0x67a734, "EA::Ant::Anim::CacheLock::CacheLock (constprop)" },
-    { 0x681f54, "EA::Ant::Anim::CacheLock::CacheLock" },
-    { 0x6a140c, "EA::Ant::SceneOpNode::AddJobEvent" },
-    { 0x6a1658, "EA::Ant::SceneOpNode::ScheduleTaskList" },
-    { 0x6a17d0, "EA::Ant::SceneOpNode::RunFunc" },
-    { 0xf37600, "EA::Ant::Interaction::InteractionManager::GetInteractionScene" },
+    { 0x539fa4, "EA::Audio::Core::BufferReference::ClearPending" },
+    { 0x651cf4, "EA::Ant::Anim::CacheLock::CacheLock (constprop)" },
+    { 0x659514, "EA::Ant::Anim::CacheLock::CacheLock" },
+    { 0x6789cc, "EA::Ant::SceneOpNode::AddJobEvent" },
+    { 0x678c18, "EA::Ant::SceneOpNode::ScheduleTaskList" },
+    { 0x678d90, "EA::Ant::SceneOpNode::RunFunc" },
+    { 0xf0e180, "EA::Ant::Interaction::InteractionManager::GetInteractionScene" },
 };
 
 static volatile uint32_t spin_sleeps;

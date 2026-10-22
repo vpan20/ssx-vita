@@ -35,9 +35,9 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_MeshCache_allocBuffer 0xa650d4 // Scaleform::Render::GL::MeshCache::allocBuffer(unsigned*, MeshBuffer**, MeshBufferSet&, unsigned, bool)
-#define OFF_MeshBuffer_Unmap      0xa6416c // Scaleform::Render::GL::MeshBuffer::Unmap()
+// libgame.so v0.0.7833
+#define OFF_MeshCache_allocBuffer 0xa3c0f4 // Scaleform::Render::GL::MeshCache::allocBuffer(unsigned*, MeshBuffer**, MeshBufferSet&, unsigned, bool)
+#define OFF_MeshBuffer_Unmap      0xa3b18c // Scaleform::Render::GL::MeshBuffer::Unmap()
 // Scaleform::Render::GL::MeshBuffer fields
 #define MB_SIZE(b)   (*(uint32_t *)((uint8_t *)(b) + 20))
 #define MB_MAPPED(b) (*(void **)((uint8_t *)(b) + 24))

@@ -41,10 +41,10 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430, in CarvingController::GatherGameStateParameters
-#define OFF_Gather 0x7cb3b8        // the function (debug counters)
-#define OFF_NOSE_STORE 0x7cbb28    // strb r0, [r4, #217]; cmp r3, #0
-#define OFF_TAIL_STORE 0x7cbb54    // strb r0, [r4, #218]; ldr r3, [r5, #48]
+// libgame.so v0.0.7833, in CarvingController::GatherGameStateParameters
+#define OFF_Gather 0x7a2978        // the function (debug counters)
+#define OFF_NOSE_STORE 0x7a30e8    // strb r0, [r4, #217]; cmp r3, #0
+#define OFF_TAIL_STORE 0x7a3114    // strb r0, [r4, #218]; ldr r3, [r5, #48]
 #define NOSE_STORE_INSNS 0xe5c400d9, 0xe3530000
 #define TAIL_STORE_INSNS 0xe5c400da, 0xe5953030
 #define PARAM_PRESSING(p) (*(uint8_t *)((uint8_t *)(p) + 216))
@@ -57,7 +57,7 @@ uint32_t ssx_press_nose_ret, ssx_press_tail_ret;
 // The player's rider: the game state table the pad data goes to.
 // GameplayBase::GetClassicGamepadData passes it on to ClassicGamepadAsset::
 // UpdateGamepadData for controller 0 only, every update.
-#define OFF_UpdateGamepadData 0x12ac208 // Peripheral::ClassicGamepadAsset::UpdateGamepadData(Table&, float, float const*) const
+#define OFF_UpdateGamepadData 0x1280e10 // Peripheral::ClassicGamepadAsset::UpdateGamepadData(Table&, float, float const*) const
 const void *volatile ssx_press_player_table;
 static void (*UpdateGamepadData_orig)(const void *asset, void *table, float dt, const float *data);
 static void UpdateGamepadData_hook(const void *asset, void *table, float dt, const float *data) {

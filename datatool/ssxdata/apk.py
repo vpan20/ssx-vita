@@ -14,9 +14,9 @@ import os
 import shutil
 import zipfile
 
-GAME_VERSION = "0.0.8430"
+GAME_VERSION = "0.0.7833"
 LIBGAME = "lib/armeabi/libgame.so"
-LIBGAME_SHA256 = "c8ee5dce525875c8466670ead20a9821aa8fab4270c5767869c2aba511693ac2"
+LIBGAME_SHA256 = "921bd7a94ab3569fe68e5e5b6ef9c3583ae3be0ae5bf773428cbb21ae7b44a4f"  # v0.0.7833 (lukebrl's original: v0.0.8430, c8ee5dce...)
 LIBRARIES = (LIBGAME, "lib/armeabi/libgnustl_shared.so")
 ASSETS = "assets/"
 

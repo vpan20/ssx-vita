@@ -43,12 +43,12 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_SetPrimRange 0xdb1998                 // RNA::MeshC::SetPrimRange(int, int)
-#define OFF_MeshRenderImmediateMultipass 0xd85e58 // RNAX::MeshRenderImmediateMultipass(DeviceC*, void*, MeshC*, MaterialC*)
-#define OFF_GetOGLES20 0xdb7b78                   // RNA::DeviceC::GetOGLES20() const
-#define OFF_GetNumPasses 0xdafb68                 // RNA::DeviceC::GetNumPasses() const
-#define OFF_UnbindMesh 0xdb8b28                   // RNA::MeshPlatC::UnbindMesh(DeviceC*)
+// libgame.so v0.0.7833
+#define OFF_SetPrimRange 0xd88a30                 // RNA::MeshC::SetPrimRange(int, int)
+#define OFF_MeshRenderImmediateMultipass 0xd5cf08 // RNAX::MeshRenderImmediateMultipass(DeviceC*, void*, MeshC*, MaterialC*)
+#define OFF_GetOGLES20 0xd8ec10                   // RNA::DeviceC::GetOGLES20() const
+#define OFF_GetNumPasses 0xd86c00                 // RNA::DeviceC::GetNumPasses() const
+#define OFF_UnbindMesh 0xd8fb84                   // RNA::MeshPlatC::UnbindMesh(DeviceC*)
 static const struct {
     uint32_t func;          // TerrainRenderObj::DispatchDeferredDispatchBin
     uint32_t table_insn;    // "add r5, pc, r5" giving its LOD table...
@@ -109,14 +109,14 @@ static void draw_full(void *device, void *mesh, int start, int count) {
 // (same layout, other buffer) and the index buffer change per chunk. The run
 // ends with the game's UnbindMesh, which leaves things as the game expects.
 
-#define OFF_GetLocation 0xd85938 // RNAX::GetLocation(DeviceC*, ElementName, short)
+#define OFF_GetLocation 0xd5c9e8 // RNAX::GetLocation(DeviceC*, ElementName, short)
 // BindMesh's tables, from the "add rX, pc, rX" at these addresses and their literals
-#define OFF_SIZES_INSN 0xdc10a8 // components per element type, 12-byte entries, +4
-#define OFF_SIZES_LIT 0xdc1278
-#define OFF_TYPES_INSN 0xdc10c0 // GL types of element types 1-45, halfwords at +832
-#define OFF_TYPES_LIT 0xdc1280
-#define OFF_NORMS_INSN 0xdc10b4 // normalized flags of element types 9-45, bytes at +792
-#define OFF_NORMS_LIT 0xdc127c
+#define OFF_SIZES_INSN 0xd98050 // components per element type, 12-byte entries, +4
+#define OFF_SIZES_LIT 0xd98220
+#define OFF_TYPES_INSN 0xd98068 // GL types of element types 1-45, halfwords at +832
+#define OFF_TYPES_LIT 0xd98228
+#define OFF_NORMS_INSN 0xd9805c // normalized flags of element types 9-45, bytes at +792
+#define OFF_NORMS_LIT 0xd98224
 
 // VertexFormatC: element count at +40, 24-byte elements from +44
 #define FORMAT_COUNT(f) (*(int32_t *)((uint8_t *)(f) + 40))

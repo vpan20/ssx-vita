@@ -48,11 +48,11 @@
 
 extern so_module so_mod;
 
-// libgame.so v0.0.8430
-#define OFF_MeshPlatC_BindMesh 0xdc1064    // RNA::MeshPlatC::BindMesh(RNA::DeviceC*)
-#define OFF_MeshPlatC_UnbindMesh 0xdb8b28  // RNA::MeshPlatC::UnbindMesh(RNA::DeviceC*)
-#define OFF_MeshPlatC_dtor 0xdc262c        // RNA::MeshPlatC::~MeshPlatC() (the deleting one calls it)
-#define OFF_RNAX_GetLocation 0xd85938      // RNAX::GetLocation(RNA::DeviceC*, RNA::ElementNameE, short)
+// libgame.so v0.0.7833
+#define OFF_MeshPlatC_BindMesh 0xd9800c    // RNA::MeshPlatC::BindMesh(RNA::DeviceC*)
+#define OFF_MeshPlatC_UnbindMesh 0xd8fb84  // RNA::MeshPlatC::UnbindMesh(RNA::DeviceC*)
+#define OFF_MeshPlatC_dtor 0xd995d4        // RNA::MeshPlatC::~MeshPlatC() (the deleting one calls it)
+#define OFF_RNAX_GetLocation 0xd5c9e8      // RNAX::GetLocation(RNA::DeviceC*, RNA::ElementNameE, short)
 
 // MeshPlatC: vertex format +20, streams (array of StreamPlatC*) +28, indices
 // +32, the game's own vertex array object +64 and its "make one" flag +68
