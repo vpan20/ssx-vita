@@ -1,13 +1,13 @@
 build 864c1c6
--rw-r--r-- 1 runner runner 662223 Oct 20 05:40 build/SSX.vpk
--rw-r--r-- 1 runner runner 668419 Oct 20 05:40 build/eboot.bin
+-rw-r--r-- 1 runner runner 662396 Oct 22 06:59 build/SSX.vpk
+-rw-r--r-- 1 runner runner 668719 Oct 22 06:59 build/eboot.bin
 Archive:  build/SSX.vpk
   Length      Date    Time    Name
 ---------  ---------- -----   ----
-      912  2026-10-20 05:40   sce_sys/param.sfo
-   668419  2026-10-20 05:40   eboot.bin
+      912  2026-10-22 06:59   sce_sys/param.sfo
+   668719  2026-10-22 06:59   eboot.bin
 ---------                     -------
-   669331                     2 files
+   669631                     2 files
 Done testing
 usage: vita-elf-create [-v|vv|vvv] [-s] [-n] [[-e | -g] config.yml] [-l <long_name_option>] [-m start,stop,exit] input.elf output.velf
 /usr/local/vitasdk/bin/vita-pack-vpk
